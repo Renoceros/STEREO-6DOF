@@ -5,7 +5,7 @@ import os
 import utils.stereo_utils as su
 import config
 
-# === Configuration ===(Take from config.py)
+# === Configuration === (Take from config.py)
 start, start_str = su.Current()
 print("Start Time : "+start_str)
 
@@ -21,7 +21,7 @@ os.makedirs(output_dir, exist_ok=True)
 
 # === Load Calibration & Processing Parameters ===
 mtx_left, dist_left, mtx_right, dist_right = su.load_camera_calibration(calibration_csv)
-common_roi, common_image_size, roi_left, roi_right = su.load_processing_parameters(processing_csv)
+common_roi, common_image_size, _, _ = su.load_processing_parameters(processing_csv)  # Using common ROI only
 
 # === Open Video ===
 cap = cv2.VideoCapture(video_path)
@@ -30,13 +30,12 @@ orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 print(f"Video resolution: {orig_width}x{orig_height}")
 
 # === Sanity Check ===
-if (orig_width, orig_height) != (1280 * 2, 640):
-    raise ValueError("Unexpected video resolution. Expected 2560x640 for stereo 1280x640 input.")
+if (orig_width, orig_height) != (1280, 480):
+    raise ValueError("Unexpected video resolution. Expected 1280x480 for stereo 640x480 input.")
 
 # === Undistortion Maps ===
-frame_dummy = np.zeros((640, 1280, 3), dtype=np.uint8)
-mapx_left, mapy_left = su.create_undistort_map(mtx_left, dist_left, (1280, 640))
-mapx_right, mapy_right = su.create_undistort_map(mtx_right, dist_right, (1280, 640))
+mapx_left, mapy_left = su.create_undistort_map(mtx_left, dist_left, (640, 480))
+mapx_right, mapy_right = su.create_undistort_map(mtx_right, dist_right, (640, 480))
 
 # === Output Video Writers ===
 fps = cap.get(cv2.CAP_PROP_FPS)
@@ -55,8 +54,9 @@ while cap.isOpened():
     left_gray = su.convert_to_grayscale(left_frame)
     right_gray = su.convert_to_grayscale(right_frame)
 
-    left_corrected = su.undistort_and_crop(left_gray, mapx_left, mapy_left, common_roi)
-    right_corrected = su.undistort_and_crop(right_gray, mapx_right, mapy_right, common_roi)
+    # Update to use stereo_utils function for undistort, crop, and resize using common ROI
+    left_corrected = su.undistort_crop_resize(left_gray, mapx_left, mapy_left, common_roi, common_image_size)
+    right_corrected = su.undistort_crop_resize(right_gray, mapx_right, mapy_right, common_roi, common_image_size)
 
     out_left.write(left_corrected)
     out_right.write(right_corrected)
@@ -71,4 +71,4 @@ out_right.release()
 print("Processing complete.")
 end, end_str = su.Current()
 print("End Time : "+end_str)
-print("Durration : "+str(end-start))
+print("Duration : "+str(end-start))

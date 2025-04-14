@@ -37,10 +37,13 @@ def scale_roi(roi, scale_x, scale_y):
     x, y, w, h = roi
     return (int(x * scale_x), int(y * scale_y), int(w * scale_x), int(h * scale_y))
 
-def undistort_and_crop(frame, mapx, mapy, roi):
-    undistorted = cv2.remap(frame, mapx, mapy, interpolation=cv2.INTER_LINEAR)
+def undistort_crop_resize(gray_img, mapx, mapy, roi, target_size):
+    """Undistorts, crops, and resizes a grayscale image."""
+    undistorted = cv2.remap(gray_img, mapx, mapy, interpolation=cv2.INTER_LINEAR)
     x, y, w, h = roi
-    return undistorted[y:y+h, x:x+w]
+    cropped = undistorted[y:y+h, x:x+w] if w > 0 and h > 0 else undistorted
+    return cv2.resize(cropped, target_size)
+
 
 def split_stereo_frame(frame):
     h, w = frame.shape[:2]

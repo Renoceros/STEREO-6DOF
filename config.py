@@ -5,3 +5,4 @@ processing_csv = 'csv/processing_parameters.csv'
 vid_preprocessed = 'video/preprocessed/'
 f_width = 1240
 f_height = 640
+raw_path = "video/raw"
