@@ -1,67 +1,103 @@
-# calibration.py
+# Calibration.py
 import cv2
 import numpy as np
 import os
 import csv
+import utils.stereo_utils as su
 
-def calibrate_camera():
-    chessboard_size = (18, 12)  # Adjust according to your pattern
+def calibrate_camera_live():
+    start = su.Current()
+    print("Start Time : "+str(start))
+    chessboard_size = (18, 12)
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-    
+
     objp = np.zeros((chessboard_size[0] * chessboard_size[1], 3), np.float32)
     objp[:, :2] = np.mgrid[0:chessboard_size[0], 0:chessboard_size[1]].T.reshape(-1, 2)
+
+    objpoints = []
+    imgpoints_left = []
+    imgpoints_right = []
+
+    os.makedirs("calibration_images/left", exist_ok=True)
+    os.makedirs("calibration_images/right", exist_ok=True)
+
+    cap = cv2.VideoCapture(0)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+    image_count = 0
+    state = 'left'
+
+    print("Press SPACE to capture, ESC to exit.")
     
-    objpoints = []  # 3D points
-    imgpoints_left = []  # 2D points for left camera
-    imgpoints_right = []  # 2D points for right camera
-    
-    left_folder = "calibration_images/left"
-    right_folder = "calibration_images/right"
-    
-    left_images = sorted([os.path.join(left_folder, f) for f in os.listdir(left_folder) if f.endswith(".jpg")])
-    right_images = sorted([os.path.join(right_folder, f) for f in os.listdir(right_folder) if f.endswith(".jpg")])
-    
-    if not left_images or not right_images:
-        print("Error: No calibration images found.")
-        return
-    
-    for left_img_path, right_img_path in zip(left_images, right_images):
-        left_img = cv2.imread(left_img_path)
-        right_img = cv2.imread(right_img_path)
-        
-        gray_left = cv2.cvtColor(left_img, cv2.COLOR_BGR2GRAY)
-        gray_right = cv2.cvtColor(right_img, cv2.COLOR_BGR2GRAY)
-        
-        found_left, corners_left = cv2.findChessboardCorners(gray_left, chessboard_size, None)
-        found_right, corners_right = cv2.findChessboardCorners(gray_right, chessboard_size, None)
-        
-        if found_left and found_right:
-            objpoints.append(objp)
-            corners_left = cv2.cornerSubPix(gray_left, corners_left, (11, 11), (-1, -1), criteria)
-            corners_right = cv2.cornerSubPix(gray_right, corners_right, (11, 11), (-1, -1), criteria)
-            imgpoints_left.append(corners_left)
-            imgpoints_right.append(corners_right)
-    
+    end = su.Current()
+    print("End Time : "+str(end))
+    print("Durration To show feed: "+str(end-start))
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Camera feed error.")
+            break
+
+        height, width = frame.shape[:2]
+        half_width = width // 2
+        left = frame[:, :half_width]
+        right = frame[:, half_width:]
+
+        display = left if state == 'left' else right
+        cv2.putText(display, f"Capture {state.upper()} image", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+        cv2.imshow("Calibration", display)
+
+        key = cv2.waitKey(1)
+        if key == 27:  # ESC to quit
+            break
+        elif key == 32:  # SPACE to capture
+            gray = cv2.cvtColor(display, cv2.COLOR_BGR2GRAY)
+            found, corners = cv2.findChessboardCorners(gray, chessboard_size, None)
+
+            print(f"{state.capitalize()} Image: Chessboard Found? {found}")
+
+            if found:
+                corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
+
+                if state == 'left':
+                    imgpoints_left.append(corners)
+                    objpoints.append(objp)
+                    filename = f"calibration_images/left/left_{image_count:02d}.jpg"
+                    cv2.imwrite(filename, display)
+                    state = 'right'
+                else:
+                    imgpoints_right.append(corners)
+                    filename = f"calibration_images/right/right_{image_count:02d}.jpg"
+                    cv2.imwrite(filename, display)
+                    image_count += 1
+                    state = 'left'
+
+    cap.release()
+    cv2.destroyAllWindows()
+
     if not objpoints:
-        print("Error: Chessboard not detected in any images.")
+        print("No valid chessboard pairs captured.")
         return
-    
-    ret_left, mtx_left, dist_left, rvecs_left, tvecs_left = cv2.calibrateCamera(objpoints, imgpoints_left, gray_left.shape[::-1], None, None)
-    ret_right, mtx_right, dist_right, rvecs_right, tvecs_right = cv2.calibrateCamera(objpoints, imgpoints_right, gray_right.shape[::-1], None, None)
-    
-    print("Calibration successful!")
-    print("Left Camera Matrix:", mtx_left)
-    print("Right Camera Matrix:", mtx_right)
-    print("Left Distortion Coefficients:", dist_left)
-    print("Right Distortion Coefficients:", dist_right)
-    
-    with open("csv/camera_calibration_results.csv", "w", newline="") as file:
-        writer = csv.writer(file)
+
+    print("Running calibration...")
+
+    ret_left, mtx_left, dist_left, *_ = cv2.calibrateCamera(objpoints, imgpoints_left, gray.shape[::-1], None, None)
+    ret_right, mtx_right, dist_right, *_ = cv2.calibrateCamera(objpoints, imgpoints_right, gray.shape[::-1], None, None)
+
+    print("Calibration complete.")
+    print("Left Camera Matrix:\n", mtx_left)
+    print("Right Camera Matrix:\n", mtx_right)
+
+    os.makedirs("csv", exist_ok=True)
+    with open("csv/camera_calibration_results.csv", "w", newline="") as f:
+        writer = csv.writer(f)
         writer.writerow(["Parameter", "Left Camera", "Right Camera"])
         writer.writerow(["Matrix", mtx_left.tolist(), mtx_right.tolist()])
         writer.writerow(["Distortion Coefficients", dist_left.tolist(), dist_right.tolist()])
-    
-    print("Calibration results saved to camera_calibration_results.csv")
-    
+
+    print("Saved calibration to csv/camera_calibration_results.csv")
+
 if __name__ == "__main__":
-    calibrate_camera()
+    calibrate_camera_live()

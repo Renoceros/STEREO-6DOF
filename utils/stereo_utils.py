@@ -1,9 +1,11 @@
-# stereo_utils.py
-
+# utils/stereo_utils.py
+from tracemalloc import start
 import cv2
+from glm import e
 import numpy as np
 import pandas as pd
 import csv
+from datetime import datetime
 
 def load_camera_calibration(csv_file):
     """Loads camera calibration data from CSV."""
@@ -18,14 +20,18 @@ def load_camera_calibration(csv_file):
     
     return mtx_left, dist_left, mtx_right, dist_right
 
-def load_processing_parameters(csv_path):
-    df = pd.read_csv(csv_path)
-    def parse_roi(roi_str):
-        return tuple(map(int, roi_str.strip('()').split(',')))
-    roi_left = parse_roi(df['roi_left'][0])
-    roi_right = parse_roi(df['roi_right'][0])
-    common_roi = parse_roi(df['common_roi'][0])
-    return roi_left, roi_right, common_roi
+def load_processing_parameters(csv_file):
+    """Loads precomputed processing parameters from CSV."""
+    params = {}
+    with open(csv_file, "r") as file:
+        reader = csv.reader(file)
+        next(reader)  # Skip header row
+        for row in reader:
+            key = row[0]
+            value = eval(row[1])  # Convert string to tuple
+            params[key] = value
+
+    return params["Common ROI (x, y, w, h)"], params["Common Image Size (w, h)"], params["Left ROI (x, y, w, h)"], params["Right ROI (x, y, w, h)"]
 
 def scale_roi(roi, scale_x, scale_y):
     x, y, w, h = roi
@@ -46,3 +52,7 @@ def create_undistort_map(mtx, dist, size):
 
 def convert_to_grayscale(frame):
     return cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+def Current():
+    start = datetime.now().strftime("%H:%M:%S")
+    return start

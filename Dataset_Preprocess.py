@@ -1,23 +1,21 @@
 # Dataset_Preprocess.py
-
 import cv2
 import numpy as np
 import os
 import utils.stereo_utils as su
 import config
-import datetime
 
 
 # === Configuration ===(Take from config.py)
-start_time = datetime.datetime.now
-print(start_time)
+start = su.Current()
+print("Start Time : "+str(start))
 
 video_path = config.vid_unprocessed
 calibration_csv = config.calibration_csv
 processing_csv = config.processing_csv
 base_output_dir = config.vid_preprocessed
 
-existing_batches = [d for d in os.listdir(base_output_dir) if os.path.isdir(os.path.join(base_output_dir, d)) and d.start_timeswith('BATCH_')]
+existing_batches = [d for d in os.listdir(base_output_dir) if os.path.isdir(os.path.join(base_output_dir, d)) and d.startswith('BATCH_')]
 batch_num = len(existing_batches)
 #AGASGGSAAHSDJASHGDASHFJDSHakhirnya bisa rapih
 output_dir = os.path.join(base_output_dir, f'BATCH_{batch_num}')
@@ -25,7 +23,7 @@ os.makedirs(output_dir, exist_ok=True)
 
 # === Load Calibration & Processing Parameters ===
 mtx_left, dist_left, mtx_right, dist_right = su.load_camera_calibration(calibration_csv)
-roi_left, roi_right, common_roi = su.load_processing_parameters(processing_csv)
+common_roi, common_image_size, roi_left, roi_right = su.load_processing_parameters(processing_csv)
 
 # === Open Video ===
 cap = cv2.VideoCapture(video_path)
@@ -81,6 +79,6 @@ cap.release()
 out_left.release()
 out_right.release()
 print("Processing complete.")
-end_time = datetime.datetime.now
-print(end_time)
-print("Durration : "+str(end_time-start_time))
+end = su.Current()
+print("End Time : "+str(end))
+print("Durration : "+str(end-start))
