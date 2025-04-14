@@ -5,21 +5,26 @@ import numpy as np
 import os
 import utils.stereo_utils as su
 import config
+import datetime
+
 
 # === Configuration ===(Take from config.py)
-video_path = config.video_path
+start_time = datetime.datetime.now
+print(start_time)
+
+video_path = config.vid_unprocessed
 calibration_csv = config.calibration_csv
 processing_csv = config.processing_csv
-base_output_dir = config.output_dir
+base_output_dir = config.vid_preprocessed
 
-existing_batches = [d for d in os.listdir(base_output_dir) if os.path.isdir(os.path.join(base_output_dir, d)) and d.startswith('BATCH_')]
+existing_batches = [d for d in os.listdir(base_output_dir) if os.path.isdir(os.path.join(base_output_dir, d)) and d.start_timeswith('BATCH_')]
 batch_num = len(existing_batches)
 #AGASGGSAAHSDJASHGDASHFJDSHakhirnya bisa rapih
 output_dir = os.path.join(base_output_dir, f'BATCH_{batch_num}')
 os.makedirs(output_dir, exist_ok=True)
 
 # === Load Calibration & Processing Parameters ===
-calib = su.load_camera_calibration(calibration_csv)
+mtx_left, dist_left, mtx_right, dist_right = su.load_camera_calibration(calibration_csv)
 roi_left, roi_right, common_roi = su.load_processing_parameters(processing_csv)
 
 # === Open Video ===
@@ -42,8 +47,8 @@ common_roi = su.scale_roi(common_roi, scale_x, scale_y)
 
 # === Undistortion Maps ===
 frame_dummy = np.zeros((orig_height, orig_width // 2, 3), dtype=np.uint8)
-mapx_left, mapy_left = su.create_undistort_map(calib['mtx_left'], calib['dist_left'], frame_dummy.shape[1::-1])
-mapx_right, mapy_right = su.create_undistort_map(calib['mtx_right'], calib['dist_right'], frame_dummy.shape[1::-1])
+mapx_left, mapy_left = su.create_undistort_map(mtx_left, dist_left, frame_dummy.shape[1::-1])
+mapx_right, mapy_right = su.create_undistort_map(mtx_right, dist_right, frame_dummy.shape[1::-1])
 
 # === Output Video Writers ===
 fps = cap.get(cv2.CAP_PROP_FPS)
@@ -76,3 +81,6 @@ cap.release()
 out_left.release()
 out_right.release()
 print("Processing complete.")
+end_time = datetime.datetime.now
+print(end_time)
+print("Durration : "+str(end_time-start_time))

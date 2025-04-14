@@ -5,18 +5,18 @@ import numpy as np
 import pandas as pd
 import csv
 
-def load_camera_calibration(csv_path):
-    calibration_data = {}
-    with open(csv_path, 'r') as file:
+def load_camera_calibration(csv_file):
+    """Loads camera calibration data from CSV."""
+    with open(csv_file, "r") as file:
         reader = csv.reader(file)
-        for row in reader:
-            key = row[0]
-            values = np.array(row[1:], dtype=np.float64)
-            if 'mtx' in key:
-                calibration_data[key] = values.reshape((3, 3))
-            elif 'dist' in key:
-                calibration_data[key] = values
-    return calibration_data
+        data = list(reader)
+    
+    mtx_left = np.array(eval(data[1][1]))
+    mtx_right = np.array(eval(data[1][2]))
+    dist_left = np.array(eval(data[2][1]))
+    dist_right = np.array(eval(data[2][2]))
+    
+    return mtx_left, dist_left, mtx_right, dist_right
 
 def load_processing_parameters(csv_path):
     df = pd.read_csv(csv_path)
