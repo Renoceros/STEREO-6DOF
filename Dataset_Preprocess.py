@@ -3,15 +3,7 @@
 import cv2
 import numpy as np
 import os
-from utils.stereo_utils import (
-    load_camera_calibration,
-    load_processing_parameters,
-    scale_roi,
-    undistort_and_crop,
-    split_stereo_frame,
-    create_undistort_map,
-    convert_to_grayscale
-)
+import utils.stereo_utils as su
 
 # === Configuration ===
 video_path = 'Dataset.avi'
@@ -21,8 +13,8 @@ output_dir = 'output/'
 os.makedirs(output_dir, exist_ok=True)
 
 # === Load Calibration & Processing Parameters ===
-calib = load_camera_calibration(calibration_csv)
-roi_left, roi_right, common_roi = load_processing_parameters(processing_csv)
+calib = su.load_camera_calibration(calibration_csv)
+roi_left, roi_right, common_roi = su.load_processing_parameters(processing_csv)
 
 # === Open Video ===
 cap = cv2.VideoCapture(video_path)
@@ -38,14 +30,14 @@ scale_y = orig_height / base_height
 print(f"Scaling factors - X: {scale_x:.2f}, Y: {scale_y:.2f}")
 
 # === Scale ROIs to Actual Video Resolution ===
-roi_left = scale_roi(roi_left, scale_x, scale_y)
-roi_right = scale_roi(roi_right, scale_x, scale_y)
-common_roi = scale_roi(common_roi, scale_x, scale_y)
+roi_left = su.scale_roi(roi_left, scale_x, scale_y)
+roi_right = su.scale_roi(roi_right, scale_x, scale_y)
+common_roi = su.scale_roi(common_roi, scale_x, scale_y)
 
 # === Undistortion Maps ===
 frame_dummy = np.zeros((orig_height, orig_width // 2, 3), dtype=np.uint8)
-mapx_left, mapy_left = create_undistort_map(calib['mtx_left'], calib['dist_left'], frame_dummy.shape[1::-1])
-mapx_right, mapy_right = create_undistort_map(calib['mtx_right'], calib['dist_right'], frame_dummy.shape[1::-1])
+mapx_left, mapy_left = su.create_undistort_map(calib['mtx_left'], calib['dist_left'], frame_dummy.shape[1::-1])
+mapx_right, mapy_right = su.create_undistort_map(calib['mtx_right'], calib['dist_right'], frame_dummy.shape[1::-1])
 
 # === Output Video Writers ===
 fps = cap.get(cv2.CAP_PROP_FPS)
@@ -60,12 +52,12 @@ while cap.isOpened():
     if not ret:
         break
 
-    left_frame, right_frame = split_stereo_frame(frame)
-    left_gray = convert_to_grayscale(left_frame)
-    right_gray = convert_to_grayscale(right_frame)
+    left_frame, right_frame = su.split_stereo_frame(frame)
+    left_gray = su.convert_to_grayscale(left_frame)
+    right_gray = su.convert_to_grayscale(right_frame)
 
-    left_corrected = undistort_and_crop(left_gray, mapx_left, mapy_left, common_roi)
-    right_corrected = undistort_and_crop(right_gray, mapx_right, mapy_right, common_roi)
+    left_corrected = su.undistort_and_crop(left_gray, mapx_left, mapy_left, common_roi)
+    right_corrected = su.undistort_and_crop(right_gray, mapx_right, mapy_right, common_roi)
 
     out_left.write(left_corrected)
     out_right.write(right_corrected)
