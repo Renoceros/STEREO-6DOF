@@ -7,8 +7,8 @@ import config
 
 
 # === Configuration ===(Take from config.py)
-start = su.Current()
-print("Start Time : "+str(start))
+start, start_str = su.Current()
+print("Start Time : "+start_str)
 
 video_path = config.vid_unprocessed
 calibration_csv = config.calibration_csv
@@ -79,6 +79,6 @@ cap.release()
 out_left.release()
 out_right.release()
 print("Processing complete.")
-end = su.Current()
-print("End Time : "+str(end))
+end, end_str = su.Current()
+print("End Time : "+end_str)
 print("Durration : "+str(end-start))

@@ -54,5 +54,6 @@ def convert_to_grayscale(frame):
     return cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
 def Current():
-    start = datetime.now().strftime("%H:%M:%S")
-    return start
+    current = datetime.now()
+    current_str = datetime.now().strftime("%H:%M:%S")
+    return current, current_str

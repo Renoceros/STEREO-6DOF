@@ -6,8 +6,9 @@ import csv
 import utils.stereo_utils as su
 
 def calibrate_camera_live():
-    start = su.Current()
-    print("Start Time : "+str(start))
+    start, start_str = su.Current()
+    print("Start Time : "+start_str)
+
     chessboard_size = (18, 12)
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
@@ -29,10 +30,10 @@ def calibrate_camera_live():
     state = 'left'
 
     print("Press SPACE to capture, ESC to exit.")
-    
-    end = su.Current()
-    print("End Time : "+str(end))
-    print("Durration To show feed: "+str(end-start))
+
+    end, end_str = su.Current()
+    print("End Time : "+end_str)
+    print("Durration : "+str(end-start))
 
     while True:
         ret, frame = cap.read()
@@ -45,32 +46,35 @@ def calibrate_camera_live():
         left = frame[:, :half_width]
         right = frame[:, half_width:]
 
-        display = left if state == 'left' else right
-        cv2.putText(display, f"Capture {state.upper()} image", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
-        cv2.imshow("Calibration", display)
+        raw = left if state == 'left' else right
+
+        gray = cv2.cvtColor(raw, cv2.COLOR_BGR2GRAY)
+        enhanced = cv2.equalizeHist(gray)
+
+        cv2.putText(enhanced, f"Capture {state.upper()} image", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, 2)
+        cv2.imshow("Calibration", enhanced)
 
         key = cv2.waitKey(1)
         if key == 27:  # ESC to quit
             break
         elif key == 32:  # SPACE to capture
-            gray = cv2.cvtColor(display, cv2.COLOR_BGR2GRAY)
-            found, corners = cv2.findChessboardCorners(gray, chessboard_size, None)
+            found, corners = cv2.findChessboardCorners(enhanced, chessboard_size, None)
 
             print(f"{state.capitalize()} Image: Chessboard Found? {found}")
 
             if found:
-                corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
+                corners = cv2.cornerSubPix(enhanced, corners, (11, 11), (-1, -1), criteria)
 
                 if state == 'left':
                     imgpoints_left.append(corners)
                     objpoints.append(objp)
                     filename = f"calibration_images/left/left_{image_count:02d}.jpg"
-                    cv2.imwrite(filename, display)
+                    cv2.imwrite(filename, enhanced)
                     state = 'right'
                 else:
                     imgpoints_right.append(corners)
                     filename = f"calibration_images/right/right_{image_count:02d}.jpg"
-                    cv2.imwrite(filename, display)
+                    cv2.imwrite(filename, enhanced)
                     image_count += 1
                     state = 'left'
 
