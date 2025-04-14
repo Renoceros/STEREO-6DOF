@@ -1,2 +1,3 @@
 /dataset/*
 !/dataset/.gitkeep
+/video/preprocessed/
