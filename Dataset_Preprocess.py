@@ -4,12 +4,18 @@ import cv2
 import numpy as np
 import os
 import utils.stereo_utils as su
+import config
 
-# === Configuration ===
-video_path = 'Dataset.avi'
-calibration_csv = 'csv/camera_calibration_results.csv'
-processing_csv = 'csv/processing_parameters.csv'
-output_dir = 'output/'
+# === Configuration ===(Take from config.py)
+video_path = config.video_path
+calibration_csv = config.calibration_csv
+processing_csv = config.processing_csv
+base_output_dir = config.output_dir
+
+existing_batches = [d for d in os.listdir(base_output_dir) if os.path.isdir(os.path.join(base_output_dir, d)) and d.startswith('BATCH_')]
+batch_num = len(existing_batches)
+#AGASGGSAAHSDJASHGDASHFJDSHakhirnya bisa rapih
+output_dir = os.path.join(base_output_dir, f'BATCH_{batch_num}')
 os.makedirs(output_dir, exist_ok=True)
 
 # === Load Calibration & Processing Parameters ===
@@ -42,8 +48,8 @@ mapx_right, mapy_right = su.create_undistort_map(calib['mtx_right'], calib['dist
 # === Output Video Writers ===
 fps = cap.get(cv2.CAP_PROP_FPS)
 fourcc = cv2.VideoWriter_fourcc(*'XVID')
-out_left = cv2.VideoWriter(os.path.join(output_dir, 'left_output.avi'), fourcc, fps, (common_roi[2], common_roi[3]), isColor=False)
-out_right = cv2.VideoWriter(os.path.join(output_dir, 'right_output.avi'), fourcc, fps, (common_roi[2], common_roi[3]), isColor=False)
+out_left = cv2.VideoWriter(os.path.join(output_dir, 'Left.avi'), fourcc, fps, (common_roi[2], common_roi[3]), isColor=False)
+out_right = cv2.VideoWriter(os.path.join(output_dir, 'Right.avi'), fourcc, fps, (common_roi[2], common_roi[3]), isColor=False)
 
 # === Process Video Frame-by-Frame ===
 frame_idx = 0
