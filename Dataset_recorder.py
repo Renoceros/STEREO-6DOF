@@ -89,7 +89,7 @@ def main():
 
 
 def create_next_batch_dir():
-    base_dir = c.vid_preprocessed
+    base_dir = c.img_preprocessed
     batch_folders = [f for f in os.listdir(base_dir) if f.startswith("BATCH_") and os.path.isdir(os.path.join(base_dir, f))]
     batch_num = len(batch_folders)
     new_batch_dir = os.path.join(base_dir, f"BATCH_{batch_num}")
