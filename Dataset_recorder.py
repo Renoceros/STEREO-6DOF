@@ -1,108 +1,101 @@
-#Dataset_recorder.py
 import cv2
 import os
-import numpy as np
+import time
 import config as c
 import utils.stereo_utils as su
 
-
-def record_video(cap, output_dir, fps, frame_size):
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out_video = cv2.VideoWriter(output_dir, fourcc, fps, frame_size, isColor=True)
-
-    recording = False
-    print("Press SPACE to start/stop recording. ESC to finish.")
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            print("Error: Couldn't read frame from video source.")
-            break
-
-        cv2.imshow("Recording", frame)
-
-        key = cv2.waitKey(1) & 0xFF
-        if key == 27:  # ESC
-            break
-        elif key == 32:  # SPACE
-            recording = not recording
-            print("Recording started!" if recording else "Recording stopped!")
-
-        if recording:
-            out_video.write(frame)
-
-    out_video.release()
-
-
-def split_video(input_video_path, output_left_path, output_right_path):
-    cap = cv2.VideoCapture(input_video_path)
-    if not cap.isOpened():
-        print(f"Error: Couldn't open video file {input_video_path}.")
-        return
-
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    print(f"Video resolution: {frame_width}x{frame_height}, FPS: {fps}")
-
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out_left = cv2.VideoWriter(output_left_path, fourcc, fps, (frame_width // 2, frame_height))
-    out_right = cv2.VideoWriter(output_right_path, fourcc, fps, (frame_width // 2, frame_height))
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        left_frame = frame[:, :frame_width // 2]
-        right_frame = frame[:, frame_width // 2:]
-
-        out_left.write(left_frame)
-        out_right.write(right_frame)
-
-    cap.release()
-    out_left.release()
-    out_right.release()
-
-
 def main():
-    existing_batches = [d for d in os.listdir(c.vid_preprocessed)
-                        if os.path.isdir(os.path.join(c.vid_preprocessed, d)) and d.startswith('BATCH_')]
-    batch_num = len(existing_batches)
-    output_dir = os.path.join(c.vid_preprocessed, f'BATCH_{batch_num + 1}')
-    os.makedirs(output_dir, exist_ok=True)
-
-    temp_video_path = "video/temp/recorded_video.avi"
-    os.makedirs(os.path.dirname(temp_video_path), exist_ok=True)
-
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("Error: Couldn't open video capture.")
-        return
-
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30  # fallback in case FPS is zero
-    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    print(f"Camera resolution: {frame_width}x{frame_height}, FPS: {fps}")
-
-    record_video(cap, temp_video_path, fps, (frame_width, frame_height))
-
-    cap.release()
-    cv2.destroyAllWindows()
-
-    print("Splitting video...")
-    left_video_path = os.path.join(output_dir, 'Left.avi')
-    right_video_path = os.path.join(output_dir, 'Right.avi')
-    split_video(temp_video_path, left_video_path, right_video_path)
-
-    os.remove(temp_video_path)
-    print("Recording and splitting complete.")
-
-
-if __name__ == "__main__":
     start, start_str = su.Current()
     print("Start Time : " + start_str)
-    main()
+
+    print("Loading calibration and processing parameters...")
+    mtx_left, dist_left, mtx_right, dist_right = su.load_camera_calibration(c.calibration_csv)
+    common_roi, common_image_size, _, _ = su.load_processing_parameters(c.processing_csv)
+
+    print("Opening camera...")
+    cap = cv2.VideoCapture(0)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, c.f_width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, c.f_height)
+
+    if not cap.isOpened():
+        print("Error: Could not open camera.")
+        return
+
+    print("Creating undistortion maps...")
+    mapx_left, mapy_left = su.create_undistort_map(mtx_left, dist_left, (c.f_width // 2, c.f_height))
+    mapx_right, mapy_right = su.create_undistort_map(mtx_right, dist_right, (c.f_width // 2, c.f_height))
+
+    recording = False
+    frame_id = 0
+    output_dir = create_next_batch_dir()
+
+    image2_dir = os.path.join(output_dir, "image_2")
+    image3_dir = os.path.join(output_dir, "image_3")
+    os.makedirs(image2_dir, exist_ok=True)
+    os.makedirs(image3_dir, exist_ok=True)
+
     end, end_str = su.Current()
     print("End Time : " + end_str)
     print("Duration : " + str(end - start))
+
+    print("Ready. Press SPACE to start/stop recording. ESC to exit.")
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Warning: Failed to read from camera.")
+            continue
+
+        left_frame, right_frame = su.split_stereo_frame(frame)
+        left_gray = su.convert_to_grayscale(left_frame)
+        right_gray = su.convert_to_grayscale(right_frame)
+
+        left_proc = su.undistort_crop_resize(left_gray, mapx_left, mapy_left, common_roi, common_image_size)
+        right_proc = su.undistort_crop_resize(right_gray, mapx_right, mapy_right, common_roi, common_image_size)
+
+        # === Combine and Enhance Display ===
+        display_frame = cv2.hconcat([left_proc, right_proc])
+        display_frame = cv2.equalizeHist(display_frame)
+        cv2.imshow("Stereo Recording", display_frame)
+
+        key = cv2.waitKey(1) & 0xFF
+
+        if key == 27:  # ESC key
+            print("Exiting...")
+            break
+
+        if key == 32:  # SPACE key
+            recording = not recording
+            print("=== Recording Started ===" if recording else "=== Recording Stopped ===")
+
+        if recording:
+            # Lanczos Upscaling (2x)
+            left_up = cv2.resize(left_proc, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_LANCZOS4)
+            right_up = cv2.resize(right_proc, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_LANCZOS4)
+
+            # Save PNGs
+            left_path = os.path.join(image2_dir, f"{frame_id:06d}.png")
+            right_path = os.path.join(image3_dir, f"{frame_id:06d}.png")
+            cv2.imwrite(left_path, left_up)
+            cv2.imwrite(right_path, right_up)
+            print(f"{frame_id:06d} saved")
+            frame_id += 1
+
+    cap.release()
+    cv2.destroyAllWindows()
+    end, end_str = su.Current()
+    print("End Time : " + end_str)
+    print("Duration Total : " + str(end - start))
+
+
+def create_next_batch_dir():
+    base_dir = c.vid_preprocessed
+    batch_folders = [f for f in os.listdir(base_dir) if f.startswith("BATCH_") and os.path.isdir(os.path.join(base_dir, f))]
+    batch_num = len(batch_folders)
+    new_batch_dir = os.path.join(base_dir, f"BATCH_{batch_num}")
+    os.makedirs(new_batch_dir, exist_ok=True)
+    return new_batch_dir
+
+
+if __name__ == "__main__":
+    main()
