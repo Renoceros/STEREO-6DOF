@@ -5,7 +5,6 @@ import os
 import utils.stereo_utils as su
 import config
 
-
 # === Configuration ===(Take from config.py)
 start, start_str = su.Current()
 print("Start Time : "+start_str)
@@ -17,7 +16,6 @@ base_output_dir = config.vid_preprocessed
 
 existing_batches = [d for d in os.listdir(base_output_dir) if os.path.isdir(os.path.join(base_output_dir, d)) and d.startswith('BATCH_')]
 batch_num = len(existing_batches)
-#AGASGGSAAHSDJASHGDASHFJDSHakhirnya bisa rapih
 output_dir = os.path.join(base_output_dir, f'BATCH_{batch_num}')
 os.makedirs(output_dir, exist_ok=True)
 
@@ -31,22 +29,14 @@ orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 print(f"Video resolution: {orig_width}x{orig_height}")
 
-# === Determine Base Resolution for Scaling ===
-base_width = 3840
-base_height = 1080
-scale_x = orig_width / base_width
-scale_y = orig_height / base_height
-print(f"Scaling factors - X: {scale_x:.2f}, Y: {scale_y:.2f}")
-
-# === Scale ROIs to Actual Video Resolution ===
-roi_left = su.scale_roi(roi_left, scale_x, scale_y)
-roi_right = su.scale_roi(roi_right, scale_x, scale_y)
-common_roi = su.scale_roi(common_roi, scale_x, scale_y)
+# === Sanity Check ===
+if (orig_width, orig_height) != (1280 * 2, 640):
+    raise ValueError("Unexpected video resolution. Expected 2560x640 for stereo 1280x640 input.")
 
 # === Undistortion Maps ===
-frame_dummy = np.zeros((orig_height, orig_width // 2, 3), dtype=np.uint8)
-mapx_left, mapy_left = su.create_undistort_map(mtx_left, dist_left, frame_dummy.shape[1::-1])
-mapx_right, mapy_right = su.create_undistort_map(mtx_right, dist_right, frame_dummy.shape[1::-1])
+frame_dummy = np.zeros((640, 1280, 3), dtype=np.uint8)
+mapx_left, mapy_left = su.create_undistort_map(mtx_left, dist_left, (1280, 640))
+mapx_right, mapy_right = su.create_undistort_map(mtx_right, dist_right, (1280, 640))
 
 # === Output Video Writers ===
 fps = cap.get(cv2.CAP_PROP_FPS)

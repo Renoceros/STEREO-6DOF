@@ -1,20 +1,11 @@
-#Crop_ROI_etc_param.py
+#Pre-pro_param.py
 import cv2
 import numpy as np
 import csv
 import threading
+import utils.stereo_utils as su
+import config as c
 
-def load_calibration_data(csv_file):
-    with open(csv_file, "r") as file:
-        reader = csv.reader(file)
-        data = list(reader)
-    
-    mtx_left = np.array(eval(data[1][1]))
-    mtx_right = np.array(eval(data[1][2]))
-    dist_left = np.array(eval(data[2][1]))
-    dist_right = np.array(eval(data[2][2]))
-    
-    return mtx_left, dist_left, mtx_right, dist_right
 
 def init_undistort_map(mtx, dist, w, h):
     new_mtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
@@ -29,32 +20,27 @@ def get_common_roi(roi_left, roi_right):
     
     return (x1, y1, x2 - x1, y2 - y1)  # (x, y, width, height)
 
-def undistort_and_crop(frame, mapx, mapy, roi, target_size):
+def undistort_and_crop_resize(frame, mapx, mapy, roi, target_size):
     undistorted = cv2.remap(frame, mapx, mapy, interpolation=cv2.INTER_LINEAR)
     x, y, w, h = roi
     cropped = undistorted[y:y+h, x:x+w] if w > 0 and h > 0 else undistorted
     return cv2.resize(cropped, target_size)
 
 def process_frame(frame, mapx_left, mapy_left, roi_left, mapx_right, mapy_right, roi_right, common_size, output):
-    left_frame = frame[:, :1920]
-    right_frame = frame[:, 1920:]
-
-    left_undistorted = undistort_and_crop(left_frame, mapx_left, mapy_left, roi_left, common_size)
-    right_undistorted = undistort_and_crop(right_frame, mapx_right, mapy_right, roi_right, common_size)
-
-    output["left"] = cv2.cvtColor(left_undistorted, cv2.COLOR_BGR2GRAY)
-    output["right"] = cv2.cvtColor(right_undistorted, cv2.COLOR_BGR2GRAY)
+    left_frame, right_frame = su.split_stereo_frame(frame)
+    left_undistorted = undistort_and_crop_resize(left_frame, mapx_left, mapy_left, roi_left, common_size)
+    right_undistorted = undistort_and_crop_resize(right_frame, mapx_right, mapy_right, roi_right, common_size)
+    output["left"] = su.convert_to_grayscale(left_undistorted)
+    output["right"] = su.convert_to_grayscale(right_undistorted)
 
 def save_processing_parameters(common_roi, common_size, roi_left, roi_right):
-    filename = "processing_parameters.csv"
-    with open(filename, "w", newline="") as file:
+    with open(c.processing_csv, "w", newline="") as file:
         writer = csv.writer(file)
         writer.writerow(["Parameter", "Value"])
         writer.writerow(["Common ROI (x, y, w, h)", common_roi])
         writer.writerow(["Common Image Size (w, h)", common_size])
         writer.writerow(["Left ROI (x, y, w, h)", roi_left])
         writer.writerow(["Right ROI (x, y, w, h)", roi_right])
-    
     print("\n✅ Processing Parameters Saved to 'processing_parameters.csv'")
     print(f"🔹 Common ROI: {common_roi}")
     print(f"🔹 Common Image Size: {common_size}")
@@ -62,20 +48,27 @@ def save_processing_parameters(common_roi, common_size, roi_left, roi_right):
     print(f"🔹 Right ROI: {roi_right}")
 
 def main():
-    mtx_left, dist_left, mtx_right, dist_right = load_calibration_data("camera_calibration_results.csv")
-    cap = cv2.VideoCapture(0)
+    start, start_str = su.Current()
+    print("Start Time : "+start_str)
+
+    mtx_left, dist_left, mtx_right, dist_right = su.load_camera_calibration(c.calibration_csv)
+    cap = cv2.VideoCapture(c.vid_unprocessed)
     cap.set(cv2.CAP_PROP_FPS, 60)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 3840)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-    
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, c.f_width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, c.f_height)
+
+    end, end_str = su.Current()
+    print("End Time : "+end_str)
+    print("Durration : "+str(end-start))
+
     ret, frame = cap.read()
     if not ret:
         print("Error: Couldn't read initial frame.")
         return
 
     h, w = frame.shape[:2]
-    mapx_left, mapy_left, roi_left, _ = init_undistort_map(mtx_left, dist_left, 1920, h)
-    mapx_right, mapy_right, roi_right, _ = init_undistort_map(mtx_right, dist_right, 1920, h)
+    mapx_left, mapy_left, roi_left, _ = init_undistort_map(mtx_left, dist_left, c.f_height, h)
+    mapx_right, mapy_right, roi_right, _ = init_undistort_map(mtx_right, dist_right, c.f_height, h)
     
     common_roi = get_common_roi(roi_left, roi_right)
     common_size = (common_roi[2], common_roi[3])  # (width, height)
