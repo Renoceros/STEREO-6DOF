@@ -1,5 +1,6 @@
 # utils/stereo_utils.py
 from tracemalloc import start
+import winsound
 import cv2
 from glm import e
 import numpy as np
@@ -60,3 +61,7 @@ def Current():
     current = datetime.now()
     current_str = datetime.now().strftime("%H:%M:%S")
     return current, current_str
+
+def Ding():
+    winsound.MessageBeep(winsound.MB_ICONASTERISK)
+    return

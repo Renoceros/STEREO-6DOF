@@ -1,13 +1,12 @@
 import cv2
 import os
-import time
 import config as c
 import utils.stereo_utils as su
 
 def main():
     start, start_str = su.Current()
     print("Start Time : " + start_str)
-
+    su.Ding()
     print("Loading calibration and processing parameters...")
     mtx_left, dist_left, mtx_right, dist_right = su.load_camera_calibration(c.calibration_csv)
     common_roi, common_image_size, _, _ = su.load_processing_parameters(c.processing_csv)
@@ -40,6 +39,8 @@ def main():
 
     print("Ready. Press SPACE to start/stop recording. ESC to exit.")
 
+    su.Ding()
+
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -69,9 +70,12 @@ def main():
             print("=== Recording Started ===" if recording else "=== Recording Stopped ===")
 
         if recording:
+            # HisQual-ize jajajajaj
+            left_hq = cv2.equalizeHist(left_proc)
+            right_hq = cv2.equalizeHist(right_proc)
             # Lanczos Upscaling (2x)
-            left_up = cv2.resize(left_proc, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_LANCZOS4)
-            right_up = cv2.resize(right_proc, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_LANCZOS4)
+            left_up = cv2.resize(left_hq, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_LANCZOS4)
+            right_up = cv2.resize(right_hq, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_LANCZOS4)
 
             # Save PNGs
             left_path = os.path.join(image2_dir, f"{frame_id:06d}.png")
