@@ -8,3 +8,4 @@ f_height = 480
 raw_path = "video/raw"
 vid_temp = "video/temp"
 img_preprocessed = "image/preprocessed"
+json_path = "GlobVar.json"
