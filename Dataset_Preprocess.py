@@ -3,16 +3,16 @@ import cv2
 import numpy as np
 import os
 import utils.stereo_utils as su
-import config
+import constants
 
 # === Configuration === (Take from config.py)
 start, start_str = su.Current()
 print("Start Time : "+start_str)
 
-video_path = config.vid_unprocessed
-calibration_csv = config.calibration_csv
-processing_csv = config.processing_csv
-base_output_dir = config.vid_preprocessed
+video_path = constants.vid_unprocessed
+calibration_csv = constants.calibration_csv
+processing_csv = constants.processing_csv
+base_output_dir = constants.vid_preprocessed
 
 existing_batches = [d for d in os.listdir(base_output_dir) if os.path.isdir(os.path.join(base_output_dir, d)) and d.startswith('BATCH_')]
 batch_num = len(existing_batches)

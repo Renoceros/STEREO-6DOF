@@ -4,7 +4,7 @@ import os
 import struct
 import datetime as dt
 import csv
-
+import constants as c
 start = dt.datetime.now()
 
 # KITTI dataset folder structure

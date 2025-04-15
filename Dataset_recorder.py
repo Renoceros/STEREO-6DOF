@@ -1,6 +1,6 @@
 import cv2
 import os
-import config as c
+import constants as c
 import utils.stereo_utils as su
 
 def main():
@@ -74,7 +74,7 @@ def main():
             recording = not recording
             print("=== Recording Started ===" if recording else "=== Recording Stopped ===")
 
-        if recording or frame_id<4600:
+        if recording and frame_id<=4600:
             # HisQual-ize jajajajaj
             # left_proc = cv2.equalizeHist(left_proc)
             # right_proc = cv2.equalizeHist(right_proc)
@@ -89,6 +89,7 @@ def main():
             cv2.imwrite(right_path, right_up)
             print(f"{frame_id:06d} saved")
             frame_id += 1
+            print("=== Recording Stopped ===" if frame_id<=4600 else None)
 
     cap.release()
     cv2.destroyAllWindows()

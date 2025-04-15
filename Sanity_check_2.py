@@ -4,7 +4,7 @@ import threading
 
 import numpy as np
 import utils.stereo_utils as su
-import config as c
+import constants as c
 
 def process_frame(frame, mapx_left, mapy_left, mapx_right, mapy_right, common_roi, common_size, output):
     """Processes and prepares both left and right frames using the common ROI."""

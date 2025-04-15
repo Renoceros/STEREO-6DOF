@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 import pandas as pd
 import csv
-import config as c
+import constants as c
 from datetime import datetime
 import json
 
@@ -72,10 +72,10 @@ def edge(image):
     g_m_n_c = cv2.convertScaleAbs(g_m_n, alpha=alpha, beta=beta)
 
     # Blend using a weighted addition (tweak alpha as needed)
-    x = 0.5
-    blended = cv2.addWeighted(image_gay, x, g_m_n_c, 1 - x, 0)
+    # x = 0.5
+    # blended = cv2.addWeighted(image_gay, x, g_m_n_c, 1 - x, 0)
 
-    return blended
+    return g_m_n_c
 
 
 def split_stereo_frame(frame):

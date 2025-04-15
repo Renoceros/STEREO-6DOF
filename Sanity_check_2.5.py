@@ -1,7 +1,7 @@
 # Sanity_check_2.5.py
 import cv2
 import os
-import config as c
+import constants as c
 import utils.stereo_utils as su
 
 def main():

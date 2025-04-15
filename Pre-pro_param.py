@@ -4,7 +4,7 @@ import numpy as np
 import csv
 import threading
 import utils.stereo_utils as su
-import config as c
+import constants as c
 
 
 def init_undistort_map(mtx, dist, w, h):
