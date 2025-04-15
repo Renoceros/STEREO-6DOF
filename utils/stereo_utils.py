@@ -117,3 +117,24 @@ def UpJ(key, value):
     with open(c.json_path, "w") as f:
         json.dump(data, f, indent=4)
     print(f"[UpJ] {key} updated to {value}")
+
+def get_Q_matrix(focal_length=804.0, cx=320.0, cy=240.0, baseline=0.12):
+    """
+    Generate the Q matrix (disparity-to-depth mapping) using stereo camera parameters.
+
+    Parameters:
+    - focal_length (float): focal length in pixels
+    - cx (float): principal point x-coordinate
+    - cy (float): principal point y-coordinate
+    - baseline (float): baseline distance between cameras in meters
+
+    Returns:
+    - Q (np.ndarray): 4x4 disparity-to-depth mapping matrix
+    """
+    Q = np.array([
+        [1, 0,   0,       -cx],
+        [0, 1,   0,       -cy],
+        [0, 0,   0,        focal_length],
+        [0, 0, -1 / baseline, 0]
+    ], dtype=np.float32)
+    return Q
