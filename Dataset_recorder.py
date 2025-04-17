@@ -10,15 +10,14 @@ def main():
     mtx_left, dist_left, mtx_right, dist_right = su.load_camera_calibration(c.calibration_csv)
     common_roi, common_image_size, _, _ = su.load_processing_parameters(c.processing_csv)
 
-    print("Opening camera...")
-    cap = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, c.f_width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, c.f_height)
+    cap, o_w, o_h = su.OpenCam(c.cam_src)
     
     #cap.set(cv2.CAP_PROP_EXPOSURE, -5)
     if not cap.isOpened():
         print("Error: Could not open camera.")
         return
+    if (o_w, o_h) != (1280, 480):
+        raise ValueError("Unexpected video resolution. Expected 1280x480 for stereo 640x480 input.")
 
     print("Creating undistortion maps...")
     mapx_left, mapy_left = su.create_undistort_map(mtx_left, dist_left, (c.f_width // 2, c.f_height))

@@ -118,23 +118,40 @@ def UpJ(key, value):
         json.dump(data, f, indent=4)
     print(f"[UpJ] {key} updated to {value}")
 
-def get_Q_matrix(focal_length=804.0, cx=320.0, cy=240.0, baseline=0.12):
-    """
-    Generate the Q matrix (disparity-to-depth mapping) using stereo camera parameters.
+def get_Q_matrix(use_calibration=False, ):
+    baseline=0.12
+    if use_calibration:
+        if c.calibration_csv is None:
+            raise ValueError("csv_file must be provided when use_calibration=True")
 
-    Parameters:
-    - focal_length (float): focal length in pixels
-    - cx (float): principal point x-coordinate
-    - cy (float): principal point y-coordinate
-    - baseline (float): baseline distance between cameras in meters
+        mtx_left, _, mtx_right, _ = load_camera_calibration(c.calibration_csv)
+        fx_left, cx_left, cy_left = mtx_left[0, 0], mtx_left[0, 2], mtx_left[1, 2]
+        fx_right, cx_right, cy_right = mtx_right[0, 0], mtx_right[0, 2], mtx_right[1, 2]
+    else:
+        # Defaults
+        fx_left = fx_right = 804.0
+        cx_left = cx_right = 320.0
+        cy_left = cy_right = 240.0
 
-    Returns:
-    - Q (np.ndarray): 4x4 disparity-to-depth mapping matrix
-    """
-    Q = np.array([
-        [1, 0,   0,       -cx],
-        [0, 1,   0,       -cy],
-        [0, 0,   0,        focal_length],
-        [0, 0, -1 / baseline, 0]
+    Q_left = np.array([
+        [1, 0,   0,         -cx_left],
+        [0, 1,   0,         -cy_left],
+        [0, 0,   0,          fx_left],
+        [0, 0, -1.0 / baseline, 0]
     ], dtype=np.float32)
-    return Q
+
+    Q_right = np.array([
+        [1, 0,   0,         -cx_right],
+        [0, 1,   0,         -cy_right],
+        [0, 0,   0,          fx_right],
+        [0, 0,  1.0 / baseline, 0]  # Flipped sign, because right cam is +baseline from left
+    ], dtype=np.float32)
+
+    return Q_left, Q_right
+
+def OpenCam(video_source):
+    cap = cv2.VideoCapture(video_source)
+    orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    print(f"Video resolution: {orig_width}x{orig_height}")
+    return cap, orig_width, orig_height

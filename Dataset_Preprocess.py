@@ -24,10 +24,7 @@ mtx_left, dist_left, mtx_right, dist_right = su.load_camera_calibration(calibrat
 common_roi, common_image_size, _, _ = su.load_processing_parameters(processing_csv)  # Using common ROI only
 
 # === Open Video ===
-cap = cv2.VideoCapture(video_path)
-orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-print(f"Video resolution: {orig_width}x{orig_height}")
+cap, orig_width, orig_height = su.OpenCam(video_path)
 
 # === Sanity Check ===
 if (orig_width, orig_height) != (1280, 480):
