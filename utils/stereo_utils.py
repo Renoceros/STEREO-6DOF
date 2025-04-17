@@ -98,23 +98,27 @@ def Ding():
     winsound.MessageBeep(winsound.MB_ICONASTERISK)
     return
 
-def LoJ(key):
+def Deng():
+    winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+    return
+
+def LoJ(key,jpath=c.json_path):
     """Load a variable from the JSON state file."""
-    if not os.path.exists(c.json_path):
+    if not os.path.exists(jpath):
         print("[LoJ] State file does not exist.")
         return None
-    with open(c.json_path, "r") as f:
+    with open(jpath, "r") as f:
         data = json.load(f)
     return data.get(key)
 
-def UpJ(key, value):
+def UpJ(key, value,jpath=c.json_path):
     """Update a variable in the JSON state file."""
     data = {}
-    if os.path.exists(c.json_path):
-        with open(c.json_path, "r") as f:
+    if os.path.exists(jpath):
+        with open(jpath, "r") as f:
             data = json.load(f)
     data[key] = value
-    with open(c.json_path, "w") as f:
+    with open(jpath, "w") as f:
         json.dump(data, f, indent=4)
     print(f"[UpJ] {key} updated to {value}")
 
@@ -151,6 +155,8 @@ def get_Q_matrix(use_calibration=False, ):
 
 def OpenCam(video_source):
     cap = cv2.VideoCapture(video_source)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480) 
     orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     print(f"Video resolution: {orig_width}x{orig_height}")

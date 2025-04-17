@@ -10,13 +10,22 @@ def main():
     mtx_left, dist_left, mtx_right, dist_right = su.load_camera_calibration(c.calibration_csv)
     common_roi, common_image_size, _, _ = su.load_processing_parameters(c.processing_csv)
 
-    cap, o_w, o_h = su.OpenCam(c.cam_src)
-    
+    # cap = cv2.VideoCapture(c.cam_src)
+    # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    # cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480) 
+    # orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    # orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # print(f"Video resolution: {orig_width}x{orig_height}")
+
+    cap, orig_width, orig_height = su.OpenCam(c.cam_src)
+
     #cap.set(cv2.CAP_PROP_EXPOSURE, -5)
     if not cap.isOpened():
         print("Error: Could not open camera.")
+        su.Deng()
         return
-    if (o_w, o_h) != (1280, 480):
+    if (orig_width, orig_height) != (1280, 480):
+        su.Deng()
         raise ValueError("Unexpected video resolution. Expected 1280x480 for stereo 640x480 input.")
 
     print("Creating undistortion maps...")
@@ -46,12 +55,12 @@ def main():
             print("Warning: Failed to read from camera.")
             continue
         
-        # frame = su.convert_to_grayscale(frame) <- now we try with no gray
-        # frame = cv2.equalizeHist(frame) <- now we try with no equalizeHist
+        frame = su.convert_to_grayscale(frame) #<- now we try with no gray
+        frame = cv2.equalizeHist(frame) #<- now we try with no equalizeHist
         #Let's try it like this for alpha channel consistency
 
-        frame = su.edge(frame)
-
+        # frame = su.edge(frame)
+#DOOOOOONT FORGET TO CHANGE THIS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         left_frame, right_frame = su.split_stereo_frame(frame)
         
 
@@ -88,7 +97,7 @@ def main():
             cv2.imwrite(right_path, right_up)
             print(f"{frame_id:06d} saved")
             frame_id += 1
-            print("=== Recording Stopped ===" if frame_id<=4600 else None)
+            print("=== Recording Stopped ===" if frame_id>=4600 else None)
 
     cap.release()
     cv2.destroyAllWindows()
@@ -98,15 +107,15 @@ def main():
 
 
 def create_next_batch_dir():
-    base_dir = c.img_preprocessed
-    # batch_folders = [f for f in os.listdir(base_dir) if f.startswith("BATCH_") and os.path.isdir(os.path.join(base_dir, f))]
-    # batch_num = len(batch_folders)
-    batch_num = su.LoJ("imgprp_Bcount")
+    base_dir = c.img_calibration
+    batch_folders = [f for f in os.listdir(base_dir) if f.startswith("BATCH_") and os.path.isdir(os.path.join(base_dir, f))]
+    batch_num = len(batch_folders)
+    #batch_num = su.LoJ("imgprp_Bcount")
     new_batch_dir = os.path.join(base_dir, f"BATCH_{batch_num}")
     os.makedirs(new_batch_dir, exist_ok=True)
     su.UpJ("imgprp_Bcount",batch_num+1)
     return new_batch_dir
-
+#DOOOOOONT FORGET TO CHANGE THIS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 if __name__ == "__main__":
     main()
