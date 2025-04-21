@@ -13,3 +13,6 @@ SCRIPTS/
 │   └── stereo_utils.py
 ├── camera_calibration_results.json
 └── GlobVar.json
+
+start venv : source venv/Scripts/activate
+stop venv : deactivate

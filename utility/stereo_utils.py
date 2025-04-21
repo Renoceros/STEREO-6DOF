@@ -43,7 +43,10 @@ def Split_Stereo_Frame(frame):
     mid = w // 2
     return frame[:, :mid], frame[:, mid:]
 
-#TODO: def load_camera_calibration(ccr_path="camera_calibration_results.json"):
+def load_calibration(JSON_PATH = "camera_calibration_results.json"):
+    with open(JSON_PATH, 'r') as f:
+        calib_data = json.load(f)
+    return calib_data
 
 # ===== Nice to haves functions =====
 
