@@ -16,3 +16,10 @@ SCRIPTS/
 
 start venv : source venv/Scripts/activate
 stop venv : deactivate
+
+FORMAT :
+#<filename.py>
+imports ....
+global variables = ....
+def Functions() : ... [Functions always start with capital letter : Fuction_Whatever]
+if __name__ == "__main__": ....
