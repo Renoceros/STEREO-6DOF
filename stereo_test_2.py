@@ -8,108 +8,77 @@ from utility import stereo_utils as su
 JSON_PATH = "camera_calibration_results.json"
 FRAME_WIDTH = 1280
 FRAME_HEIGHT = 480
-VIDEO_SOURCE = 0
-MATCH_EVERY_N_FRAMES = 10
-EPIPOLAR_THRESH = 2.0  # pixels
-ANGLE_THRESH = 15.0    # degrees
+VIDEO_SOURCE = "./video/raw/dataset.avi"  # Path to your stereo AVI
 
 # ===== Functions =====
-def Load_Calibration(json_path):
-    with open(json_path, 'r') as f:
-        data = json.load(f)
-    Q = np.array(data['Q'])
-    return Q
 
-def Filter_Matches_By_Epipolar_And_Angle(kp1, kp2, matches, epipolar_thresh, angle_thresh):
-    filtered = []
-    for m in matches:
-        pt1 = kp1[m.queryIdx].pt
-        pt2 = kp2[m.trainIdx].pt
-        angle1 = kp1[m.queryIdx].angle
-        angle2 = kp2[m.trainIdx].angle
-        if abs(pt1[1] - pt2[1]) < epipolar_thresh and abs(angle1 - angle2) < angle_thresh:
-            filtered.append((pt1, pt2))
-    return filtered
+def Load_Calibration_Data():
+    with open(JSON_PATH, 'r') as f:
+        calib_data = json.load(f)
+    return calib_data
 
-def Triangulate_Points(correspondences, Q):
-    points_3d = []
-    for (pt_l, pt_r) in correspondences:
-        disparity = pt_l[0] - pt_r[0]
-        if disparity == 0:
-            continue
-        point_4d = np.dot(Q, np.array([pt_l[0], pt_l[1], disparity, 1.0]))
-        point_3d = point_4d[:3] / point_4d[3]
-        points_3d.append(point_3d)
-    return np.array(points_3d)
+def Stereo_Test_2():
+    calib_data = Load_Calibration_Data()
+    Q_matrix = np.array(calib_data["Q"])
 
-def Detect_And_Match(left_img, right_img):
-    orb = cv2.ORB_create(2000)
-    kp_l, des_l = orb.detectAndCompute(left_img, None)
-    kp_r, des_r = orb.detectAndCompute(right_img, None)
+    cap, orig_width, orig_height = su.OpenCam(VIDEO_SOURCE, FRAME_WIDTH, FRAME_HEIGHT)
 
-    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-    matches = bf.match(des_l, des_r)
-    return kp_l, kp_r, matches
-
-def Track_Keypoints(prev_img, next_img, prev_pts):
-    next_pts, status, _ = cv2.calcOpticalFlowPyrLK(prev_img, next_img, prev_pts, None)
-    good_prev = prev_pts[status.flatten() == 1]
-    good_next = next_pts[status.flatten() == 1]
-    return good_prev, good_next
-
-def Run_Stereo_Tracking():
-    Q = Load_Calibration(JSON_PATH)
-    cap, _, _ = su.OpenCam(VIDEO_SOURCE, FRAME_WIDTH, FRAME_HEIGHT)
-    frame_count = 0
-    prev_gray_l, prev_gray_r = None, None
-    tracked_pts_l, tracked_pts_r = None, None
+    # StereoSGBM parameters
+    min_disp = 0
+    num_disp = 16*6  # Must be divisible by 16
+    block_size = 7
+    stereo = cv2.StereoSGBM_create(
+        minDisparity=min_disp,
+        numDisparities=num_disp,
+        blockSize=block_size,
+        P1=8 * 3 * block_size**2,
+        P2=32 * 3 * block_size**2,
+        mode=cv2.STEREO_SGBM_MODE_SGBM_3WAY
+    )
 
     while True:
         ret, frame = cap.read()
         if not ret:
-            continue
-
-        gray = su.Convert_to_Grayscale(frame)
-        left_img, right_img = su.Split_Stereo_Frame(gray)
-
-        if frame_count % MATCH_EVERY_N_FRAMES == 0 or tracked_pts_l is None:
-            kp_l, kp_r, matches = Detect_And_Match(left_img, right_img)
-            correspondences = Filter_Matches_By_Epipolar_And_Angle(kp_l, kp_r, matches, EPIPOLAR_THRESH, ANGLE_THRESH)
-
-            if not correspondences:
-                frame_count += 1
-                continue
-
-            tracked_pts_l = np.float32([pt[0] for pt in correspondences]).reshape(-1, 1, 2)
-            tracked_pts_r = np.float32([pt[1] for pt in correspondences]).reshape(-1, 1, 2)
-
-        else:
-            tracked_pts_l, _ = Track_Keypoints(prev_gray_l, left_img, tracked_pts_l)
-            tracked_pts_r, _ = Track_Keypoints(prev_gray_r, right_img, tracked_pts_r)
-
-        prev_gray_l, prev_gray_r = left_img.copy(), right_img.copy()
-
-        # Triangulate
-        if tracked_pts_l.shape[0] > 0 and tracked_pts_l.shape == tracked_pts_r.shape:
-            pts_l = tracked_pts_l.reshape(-1, 2)
-            pts_r = tracked_pts_r.reshape(-1, 2)
-            correspondences = list(zip(pts_l, pts_r))
-            pcd = Triangulate_Points(correspondences, Q)
-
-            for point in pcd:
-                x, y, z = point
-                if z > 0 and z < 3000:
-                    cv2.circle(frame, (int(x / z * 100 + 640), int(y / z * 100)), 2, (0, 255, 0), -1)
-
-        cv2.imshow("Stereo Track + PCD", frame)
-        if cv2.waitKey(1) & 0xFF == 27:
+            print("[Stereo_Test_2] Failed to read frame.")
             break
 
-        frame_count += 1
+        # Ensure grayscale
+        if len(frame.shape) == 3 and frame.shape[2] == 3:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = frame
+
+        # Split into left and right images
+        mid = FRAME_WIDTH // 2
+        left_img, right_img = gray[:, :mid], gray[:, mid:]
+
+        # Compute disparity map
+        disparity = stereo.compute(left_img, right_img).astype(np.float32) / 16.0
+
+        # Normalize for visualization
+        disp_vis = cv2.normalize(disparity, None, 0, 255, cv2.NORM_MINMAX)
+        disp_vis = np.uint8(disp_vis)
+
+        # Reproject to 3D
+        points_3d = cv2.reprojectImageTo3D(disparity, Q_matrix)
+
+        # Mask out low disparity areas
+        mask = disparity > min_disp
+        output_points = points_3d[mask]
+
+        # Optional: Show a few points for verification
+        if output_points.shape[0] > 0:
+            print(f"Sample 3D point: {output_points[0]} (total {len(output_points)} points)")
+
+        # Display disparity
+        cv2.imshow("Disparity Map", disp_vis)
+
+        key = cv2.waitKey(1) & 0xFF
+        if key == 27:  # ESC key
+            break
 
     cap.release()
     cv2.destroyAllWindows()
 
-# ===== Main =====
 if __name__ == "__main__":
-    Run_Stereo_Tracking()
+    Stereo_Test_2()

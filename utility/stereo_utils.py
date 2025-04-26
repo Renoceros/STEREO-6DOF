@@ -68,7 +68,13 @@ def Convert_to_Grayscale(frame):
 
 def Edge(image):
     #GRAY
-    image_gay = Convert_to_Grayscale(image)
+    if len(image.shape) == 3 and image.shape[2] == 3:
+            # Video is color, convert to gray first
+            image_gay = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        # Already grayscale
+        image_gay = image.copy()
+    #image_gay = Convert_to_Grayscale(image)
     # Compute the gradient of the image using Sobel operator
     sobel_x = cv2.Sobel(image_gay, cv2.CV_64F, 1, 0, ksize=1)
     sobel_y = cv2.Sobel(image_gay, cv2.CV_64F, 0, 1, ksize=1)
