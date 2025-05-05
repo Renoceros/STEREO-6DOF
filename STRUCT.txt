@@ -1,0 +1,106 @@
+./
+    .git/ [skipped]
+    ArUco/
+        - Aruco print.pdf
+        - Marker Instructions.md
+        - back.png
+        - bottom.png
+        - front.png
+        - ... (3 more .png)
+    calibration_images/
+        - cb.png
+        - checkerboard.pdf
+    capture/
+        left/
+        right/
+        together/
+    dataset/
+    depricated/ [skipped]
+    development/
+        left/
+            - left_00.jpg
+            - left_01.jpg
+            - left_02.jpg
+            - ... (25 more .jpg)
+        right/
+            - right_28.jpg
+            - right_29.jpg
+            - right_30.jpg
+            - ... (32 more .jpg)
+        steps/
+            - left_corners_00.png
+            - left_corners_01.png
+            - left_corners_02.png
+            - ... (166 more .png)
+        together/
+            - together_63.jpg
+            - together_64.jpg
+            - together_65.jpg
+            - ... (21 more .jpg)
+        unused/
+            - IMG_6106_rectified_left.png
+            - IMG_6106_rectified_right.png
+            - IMG_6110_rectified_left.png
+            - ... (55 more .png)
+    rect_test/
+        - LR_0001.png
+        - LR_0002.png
+        - LR_0003.png
+        - ... (37 more .png)
+    utility/
+        __pycache__/
+            - __init__.cpython-311.pyc
+            - stereo_utils.cpython-311.pyc
+        - __init__.py
+        - stereo_utils.py
+    venv/ [skipped]
+    video/
+        preprocessed/
+            BATCH_0/
+                - Left.avi
+                - Right.avi
+            BATCH_1/
+                - Left.avi
+                - Right.avi
+            BATCH_3/
+                - Left.avi
+                - Right.avi
+            BATCH_4/
+        raw/
+            - ArUco.avi
+            - cb.avi.avi
+            - dataset.avi
+            - ... (1 more .avi)
+            - IMG_6104.jpg
+            - IMG_6105.jpg
+            - IMG_6106.jpg
+            - ... (7 more .jpg)
+            - dataset.mp4
+        temp/
+    - .gitattributes
+    - .gitignore
+    - GlobVar.json
+    - camera_calibration_results.json
+    - development_calibration.json
+    - STRUCT.txt
+    - structure.txt
+    - aruco_gen.py
+    - aruco_pose_estimation.py
+    - calibration_capture_images.py
+    - checkerboard_gen.py
+    - development.py
+    - showcam.py
+    - stereo_calibrate.py
+    - stereo_camera_test.py
+    - stereo_rectify.py
+    - stereo_test_1.py
+    - stereo_test_2.py
+    - stereo_test_3.py
+    - stereo_test_4.py
+    - stereo_test_5.py
+    - stereo_to_kitti.py
+    - structure.py
+    - development.ipynb
+    - development_calibration.ipynb
+    - validation_left.jpg
+    - validation_right.jpg

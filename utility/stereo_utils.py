@@ -39,9 +39,11 @@ def UpJ(key, value,json_path):
     print(f"[UpJ] {key} updated to {value}")
 
 def Split_Stereo_Frame(frame):
-    h, w = frame.shape[:2]
-    mid = w // 2
-    return frame[:, :mid], frame[:, mid:]
+    height, width = frame.shape[:2]
+    mid = width // 2
+    left = frame[:, :mid]
+    right = frame[:, mid:]
+    return left, right
 
 def load_calibration(JSON_PATH = "camera_calibration_results.json"):
     with open(JSON_PATH, 'r') as f:
