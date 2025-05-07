@@ -7,6 +7,9 @@
         - bottom.png
         - front.png
         - ... (3 more .png)
+    __pycache__/
+        - aruco_box_pose_estimation.cpython-311.pyc
+        - aruco_pose_estimation.cpython-311.pyc
     calibration_images/
         - cb.png
         - checkerboard.pdf
@@ -15,6 +18,33 @@
         right/
         together/
     dataset/
+        batch1/
+            test/
+                images/
+                    - frame_0001.png
+                    - frame_0004.png
+                    - frame_0006.png
+                    - ... (411 more .png)
+                - labels.csv
+            train/
+                images/
+                    - frame_0000.png
+                    - frame_0002.png
+                    - frame_0003.png
+                    - ... (960 more .png)
+                - labels.csv
+            unsplit/
+                images/
+                    - frame_0000.png
+                    - frame_0001.png
+                    - frame_0002.png
+                    - ... (1374 more .png)
+                - labels.csv
+            val/
+                images/
+                - labels.csv
+            - metadata.md
+        batch2/
     depricated/ [skipped]
     development/
         left/
@@ -82,8 +112,10 @@
     - GlobVar.json
     - camera_calibration_results.json
     - development_calibration.json
+    - ... (1 more .json)
     - STRUCT.txt
     - structure.txt
+    - aruco_box_pose_estimation.py
     - aruco_gen.py
     - aruco_pose_estimation.py
     - calibration_capture_images.py
@@ -100,6 +132,7 @@
     - stereo_test_5.py
     - stereo_to_kitti.py
     - structure.py
+    - aruco_dataset_builder_splitter.ipynb
     - development.ipynb
     - development_calibration.ipynb
     - validation_left.jpg
