@@ -1,4 +1,4 @@
-# aruco_box_relative_pose_estimation.py
+# aruco_box_pose_estimation.py
 import cv2
 import json
 import numpy as np
