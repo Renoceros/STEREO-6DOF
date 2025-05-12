@@ -1,4 +1,4 @@
-/dataset/
+/dataset/*/
 /skripsi/
 /video/
 /image/preprocessed/
@@ -7,3 +7,4 @@
 /venv/
 /development/
 /rect_test/
+/model/*.pth

@@ -1,0 +1,5 @@
+timestamp,batch_id,total_frames,frame_step,train_count,val_count,test_count,tr_val_test_ratio,pose_method,pose_normalization
+2025-05-12 23:20:33,1,2283,3,1598,228,457,70:10:20,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
+2025-05-12 23:23:37,2,6799,1,4759,679,1361,70:10:20,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
+2025-05-12 23:26:59,3,1356,5,949,135,272,70:10:20,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
+2025-05-12 23:36:35,4,6799,0,4759,679,1361,70:10:20,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
