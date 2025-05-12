@@ -119,7 +119,7 @@ def Process_Frame(frame, face_id_map):
         
         return np.hstack((left_det, right_det))
     except Exception as e:
-        su.Deng()
+        
         print(f"Frame processing error: {e}")
         return frame
 
