@@ -1,4 +1,7 @@
-# 📦 1. Imports
+# %% [markdown]
+# IMPORTS
+
+# %%
 import os
 import json
 import csv
@@ -18,10 +21,11 @@ import datetime
 from tqdm import tqdm
 from typing import Tuple
 from torch.amp import GradScaler, autocast
-from transformers import ConvNextV2ForImageClassification, ConvNextV2FeatureExtractor
 
+# %% [markdown]
+# DCLRATIONS
 
-# 🧾 2. Declarations / Configuration
+# %%
 with open("GlobVar.json", "r") as file:
     gv = json.load(file)
 
@@ -39,18 +43,14 @@ IMG_SIZE = 384
 BASE_DIR = os.path.expanduser("~/SKRIPSI/SCRIPTS")
 DATASET_DIR = os.path.join(BASE_DIR, f"dataset/batch{BATCH_ID}")
 MODEL_SAVE_PATH = os.path.join(BASE_DIR, f"model/S-ConvNeXt6DP{BATCH_ID}.{mod_id}.pth")
-BEST_MODEL_PATH = os.path.join(BASE_DIR, f"model/BS-ConvNeXt6DP{BATCH_ID}.{mod_id}.pth")
+BEST_MODEL_PATH = os.path.join(BASE_DIR, f"model/BEST-S-ConvNeXt6DP{BATCH_ID}.{mod_id}.pth")
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# model_name = "facebook/convnextv2-nano-22k-384"
-# feature_extractor = ConvNextV2FeatureExtractor.from_pretrained(model_name)
-# backbone = ConvNextV2ForImageClassification.from_pretrained(model_name).backbone
-# backbone_out_ch = backbone.feature_info[-1]['num_chs']  # usually 512 for ConvNeXtV2 nano
-# reduce_dim = nn.Conv2d(backbone_out_ch, 256, kernel_size=1)
 
+# %% [markdown]
+# DATASETCLASS
 
-
-# 📁 3. Dataset Class
+# %%
 class PoseDataset(Dataset):
     def __init__(self, csv_file, root_dir, transform=None):
         self.annotations = pd.read_csv(csv_file)
@@ -68,7 +68,10 @@ class PoseDataset(Dataset):
             image = self.transform(image)
         return image, label
 
-# 🧮 4. Rotation Conversion + Loss Functions
+# %% [markdown]
+# Conversions loss functions rmse yadaydadaydada
+
+# %%
 def rotation_error(R_pred, R_gt):
     """Compute angular error in degrees between rotation matrices."""
     R_diff = torch.bmm(R_pred.transpose(1, 2), R_gt)
@@ -77,8 +80,8 @@ def rotation_error(R_pred, R_gt):
     angle_rad = torch.acos(torch.clamp((trace - 1) / 2, min=-1 + eps, max=1 - eps))
     return torch.rad2deg(angle_rad)
 
+
 def geodesic_loss(R_pred, R_gt):
-    """Compute geodesic loss between two rotation matrices."""
     R_diff = torch.bmm(R_pred.transpose(1, 2), R_gt)
     trace = torch.diagonal(R_diff, dim1=1, dim2=2).sum(dim=1)
     eps = 1e-6
@@ -97,19 +100,18 @@ def compute_rotation_matrix_from_ortho6d(poses_6d):
     rot = torch.stack((x, y, z), dim=-1)  # Shape: [B, 3, 3]
     return rot
 
-def combined_loss(pred, target):
-    # Translation MSE
-    trans_loss = F.mse_loss(pred[:, :3], target[:, :3])
-    
-    # Geodesic rotation loss
-    pred_rot6d = pred[:, 3:]
-    target_rot6d = target[:, 3:]
-    pred_rot = compute_rotation_matrix_from_ortho6d(pred_rot6d)
-    target_rot = compute_rotation_matrix_from_ortho6d(target_rot6d)
-    
-    geodesic = geodesic_loss(pred_rot, target_rot)
-    
-    return trans_loss + geodesic, trans_loss.item(), geodesic.item()
+def combined_loss(output, target, trans_w=1.0, rot_w=1.0, ang_w=0.1):
+    pred_trans = output[:, :3]
+    gt_trans = target[:, :3]
+    pred_rot_6d = output[:, 3:9]
+    gt_rot_6d = target[:, 3:9]
+
+    pred_rot = compute_rotation_matrix_from_ortho6d(pred_rot_6d)
+    gt_rot = compute_rotation_matrix_from_ortho6d(gt_rot_6d)
+
+    loss_trans = F.mse_loss(pred_trans, gt_trans)
+    loss_rot = geodesic_loss(pred_rot, gt_rot)
+    return trans_w * loss_trans + rot_w * loss_rot
 
 
 def rotation_error_deg_from_6d(pred_6d, gt_6d):
@@ -141,13 +143,18 @@ def calculate_translation_rmse(preds, gts):
 def translation_accuracy_percentage(rmse_cm, range_cm):
     return max(0.0, 100.0 * (1 - rmse_cm / range_cm))
 
+# %% [markdown]
+# Transform & Dataloader
 
-# 🖼 5. Transform & Dataloaders
+# %%
 def get_transform():
     return transforms.Compose([
         transforms.Resize((IMG_SIZE, IMG_SIZE)),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5]*3, std=[0.5]*3)
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],  # ImageNet mean
+            std=[0.229, 0.224, 0.225]    # ImageNet std
+        )
     ])
 
 def get_dataloader(split):
@@ -156,7 +163,8 @@ def get_dataloader(split):
     dataset = PoseDataset(csv_path, images_dir, transform=get_transform())
     return DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=(split == "train"))
 
-# 📊 6. Dataset Stats
+
+# %%
 def get_dataset_stats(loader):
     translations = []
     for _, labels in loader:
@@ -169,102 +177,47 @@ def get_dataset_stats(loader):
         'std': trans.std(dim=0)
     }
 
+
+# %% [markdown]
+# Loading...
+
+# %%
 train_loader = get_dataloader("train")
 val_loader = get_dataloader("val")
 test_loader = get_dataloader("test")
 
+# %% [markdown]
+# Model Definitions
 
-# 🧠 8. Model Definition
-
-class PatchPnPRegressor(nn.Module):
-    def __init__(self, in_channels, hidden_dim=512):
-        super().__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(in_channels * 3, hidden_dim),
+# %%
+class ConvNeXt6DP(nn.Module):
+    def __init__(self):
+        super(ConvNeXt6DP, self).__init__()
+        self.backbone = timm.create_model("convnextv2_nano.fcmae_ft_in22k_in1k", pretrained=True)
+        self.backbone.head = nn.Identity()  # Remove the classification head
+        self.head = nn.Sequential(
+            nn.Linear(1024, 512),
             nn.ReLU(),
-            nn.Linear(hidden_dim, 9)  # 3 trans + 6D rotation
+            nn.Linear(512, 9)  # 3 translation + 6 rotation
         )
 
-    def forward(self, feats, region_map, dense_coords):
-        B, C, H, W = feats.shape
-
-        # Flatten and reshape for Patch-PnP style regression
-        region_map = region_map.softmax(dim=1)  # [B, R, H, W]
-        coords_flat = dense_coords.flatten(2).permute(0, 2, 1)  # [B, HW, 3]
-        feats_flat = feats.flatten(2).permute(0, 2, 1)          # [B, HW, C]
-
-        region_map_flat = region_map.flatten(2)  # [B, R, HW]
-        region_map_flat = region_map_flat.permute(0, 2, 1)  # [B, HW, R]
-
-        pooled_feat = torch.bmm(region_map_flat.transpose(1, 2), feats_flat) / H / W
-        pooled_coords = torch.bmm(region_map_flat.transpose(1, 2), coords_flat) / H / W
-
-        concat = torch.cat([pooled_feat, pooled_coords], dim=-1)  # [B, R, C+3]
-        pooled = concat.mean(dim=1)  # Global average over regions
-
-        return self.mlp(pooled)  # [B, 9]
-
-class SConvNeXt6DP(nn.Module):
-    def __init__(self):
-        super(SConvNeXt6DP, self).__init__()
-
-        # Load ConvNeXtV2 from Hugging Face
-        self.backbone = ConvNextV2ForImageClassification.from_pretrained(
-            "facebook/convnextv2-nano-22k-384", 
-            num_labels=0  # Remove classification head
-        )
-        
-        # Get the output channels of the ConvNeXtV2 model's last layer
-        output_channels = self.backbone.config.hidden_size
-
-        # PatchPnP regression head
-        self.pnp_head = PatchPnPRegressor(in_channels=output_channels)
-
-    def forward(self, x, region_map, dense_coords):
-        # Forward pass through ConvNeXtV2 backbone
-        x = self.backbone.features(x)  # Extract features
-
-        # Pass features, region_map, and dense_coords to the PatchPnP head
-        output = self.pnp_head(x, region_map, dense_coords)
-        return output
+    def forward(self, x):
+        x = self.backbone(x)
+        return self.head(x)
 
 
+# %% [markdown]
+# The setup
 
-class SConvNeXt6DP(nn.Module):
-    def __init__(self):
-        super().__init__()
-        # 1. Shared backbone
-        self.backbone = timm.create_model("convnextv2_base.fcmae_ft_in22k_in1k", pretrained=True, features_only=True)
-        self.backbone_out_ch = self.backbone.feature_info[-1]['num_chs']  # usually 1024
-
-        # 2. Feature adjustment
-        self.reduce_dim = nn.Conv2d(self.backbone_out_ch, 256, kernel_size=1)
-
-        # 3. PatchPnP regression head
-        self.pnp_head = PatchPnPRegressor(in_channels=256)
-
-    def forward(self, left_img, right_img):
-        features_l = self.backbone(left_img)
-        features_r = self.backbone(right_img)
-
-        fused = torch.cat([features_l, features_r], dim=1)  # [B, 2C, H, W]
-        fused = self.adapter(fused)  # [B, C, H, W]
-
-        pooled = self.global_pool(fused)  # [B, C, 1, 1]
-        pooled = torch.flatten(pooled, 1)  # [B, C]
-
-        pose = self.regressor(pooled)  # [B, 9]
-        return pose
-
-
-
-
-# 🔧 9. Model Setup
-model = SConvNeXt6DP().to(DEVICE)  # Use the updated model class
+# %%
+model = ConvNeXt6DP().to(DEVICE)  # Use the updated model class
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2)
 
-# 🏋️ 10. Training Function
+# %% [markdown]
+# Train func
+
+# %%
 def train(validate=True, resume_from_checkpoint=False):
     scaler = GradScaler()
     best_val_loss = float('inf')
@@ -296,8 +249,8 @@ def train(validate=True, resume_from_checkpoint=False):
 
             optimizer.zero_grad(set_to_none=True)
             with autocast():
-                outputs = model(images, images)  # Stereo images for input
-                loss, trans_loss, geodesic = combined_loss(outputs, labels)
+                outputs = model(images)
+                loss = combined_loss(outputs, labels, TRANS_WEIGHT, ROTATION_WEIGHT, ANGULAR_WEIGHT)
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -311,6 +264,19 @@ def train(validate=True, resume_from_checkpoint=False):
         now.append(time.time())
         print(f"⏱️ Time per epoch {epoch + 1}: {int(now[epoch + 1] - now[epoch])}s")
 
+        # Apply structured pruning periodically (skip epoch 0)
+        if epoch != 0 and epoch % 5 == 0:
+            parameters_to_prune = (
+                (module, 'weight') for module in model.modules()
+                if isinstance(module, (nn.Linear, nn.Conv2d))
+            )
+            prune.global_unstructured(
+                parameters_to_prune,
+                pruning_method=prune.L1Unstructured,
+                amount=0.1
+            )
+            print(f"⚠️ Pruning applied at epoch {epoch}")
+
         if validate:
             model.eval()
             val_loss = 0.0
@@ -320,9 +286,9 @@ def train(validate=True, resume_from_checkpoint=False):
                 for images, labels in val_loader:
                     images = images.to(DEVICE)
                     labels = labels.to(DEVICE)
-                    outputs = model(images, images)
+                    outputs = model(images)
 
-                    loss, trans_loss, geodesic = combined_loss(outputs, labels)
+                    loss = combined_loss(outputs, labels, TRANS_WEIGHT, ROTATION_WEIGHT, ANGULAR_WEIGHT)
                     val_loss += loss.item()
 
                     trans_rmse, rot_rmse = compute_errors(outputs, labels)
@@ -340,37 +306,56 @@ def train(validate=True, resume_from_checkpoint=False):
 
             # Save best model if validation improves
             if epoch != 0 and avg_val_loss < best_val_loss:
-                print(f"🌟 Saving Best Model (Validation Loss Improved)")
                 best_val_loss = avg_val_loss
+                epochs_no_improve = 0
                 torch.save({
-                    'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'scaler_state_dict': scaler.state_dict(),
-                    'best_val_loss': best_val_loss
-                }, MODEL_SAVE_PATH)
-                epochs_no_improve = 0
+                    'best_val_loss': best_val_loss,
+                    'epochs_no_improve': epochs_no_improve,
+                    'epoch': epoch + 1
+                }, BEST_MODEL_PATH)
+                print(f"Model saved to: {BEST_MODEL_PATH}")
+                print("💾 Best model saved.")
             else:
                 epochs_no_improve += 1
-                if epochs_no_improve > PATIENCE:
-                    print(f"🚨 Early stopping triggered, no improvement in validation loss")
+                print(f"📉 No improvement ({epochs_no_improve}/{PATIENCE})")
+
+                if epochs_no_improve >= PATIENCE:
+                    print("⏹️ Early stopping triggered")
                     break
 
+        # Always save last checkpoint
+        torch.save({
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scaler_state_dict': scaler.state_dict(),
+            'best_val_loss': best_val_loss,
+            'epochs_no_improve': epochs_no_improve,
+            'epoch': epoch + 1
+        }, MODEL_SAVE_PATH)
+        print(f"Model saved to: {MODEL_SAVE_PATH}")
 
+# %% [markdown]
+# Actually training
 
-
-
-# ▶️ 11. Run Training
+# %%
 train(validate=True,resume_from_checkpoint=False)
 
-# 💾 12. Save Model + Update Config
+# %% [markdown]
+# Update
 
+# %%
 gv['mod_id'] += 1
 with open("GlobVar.json", "w") as file:
     json.dump(gv, file, indent=4)
 print("mod_id updated in GlobVar.json")
 
-# 🧪 13. Test Function
+# %% [markdown]
+# Test func
+
+# %%
 def test_model(model, loader, mode='Test', use_amp=False):
     inference_times = []
     model.eval()
@@ -409,13 +394,18 @@ def test_model(model, loader, mode='Test', use_amp=False):
     return avg_loss, total_trans_rmse, total_rot_rmse, np.concatenate(all_preds), np.concatenate(all_gts), avg_inference_time
 
 
-# 🔍 14. Run Test
+# %% [markdown]
+# Actually testing
+
+# %%
 model.load_state_dict(torch.load(MODEL_SAVE_PATH))
 model.to(DEVICE)
 test_avg_loss, test_total_trans_rmse, test_total_rot_rmse, test_preds, test_gts, test_avg_inference_time = test_model(model, test_loader, mode='Test', use_amp=True)
 
+# %% [markdown]
+# Val func
 
-# 🧪 15. Validation Function
+# %%
 def validate_model(model_path=None):
     inference_times = []
     if model_path:
@@ -455,15 +445,19 @@ def validate_model(model_path=None):
     return avg_loss, total_trans_rmse, total_rot_rmse, np.concatenate(all_preds), np.concatenate(all_gts), avg_inference_time
 
 
-# 🔄 16. Run Validation
+# %% [markdown]
+# Actually validating
+
+# %%
 val_avg_loss, val_total_trans_rmse, val_total_rot_rmse, val_preds, val_gts, val_avg_inference_time = validate_model(MODEL_SAVE_PATH)
 
-
-# 🧹 17. Clear CUDA Cache
+# %%
 torch.cuda.empty_cache()
 
-# 📐 18. Compute Accuracy
+# %% [markdown]
+# Calculating 
 
+# %%
 test_translation_rmse_cm = calculate_translation_rmse(test_preds, test_gts)
 val_translation_rmse_cm = calculate_translation_rmse(val_preds, val_gts)
 test_rot_accuracy = rotation_error_deg_from_6d(torch.tensor(test_preds[:, 3:]), torch.tensor(test_gts[:, 3:]))
@@ -479,8 +473,10 @@ val_range_cm = (val_trans_stats['max'].mean() - val_trans_stats['min'].mean()) *
 test_trans_accuracy_pct = translation_accuracy_percentage(test_translation_rmse_cm, test_range_cm)
 val_trans_accuracy_pct = translation_accuracy_percentage(val_translation_rmse_cm, val_range_cm)
 
+# %% [markdown]
+# Write MD
 
-# 📑 19. Compose Evaluation Report (Markdown)
+# %%
 eval_path = os.path.join(BASE_DIR, f"model/ViT6DP_EVAL_batch{BATCH_ID}.{mod_id-1}.md")
 eval_content = f"""# Evaluation Results - Batch {BATCH_ID} - Model {mod_id-1}
 
@@ -539,7 +535,7 @@ with open(eval_path, 'w') as f:
     f.write(eval_content)
 print(f"Evaluation report saved to: {eval_path}")
 
-# 📈 20. Write Evaluation to CSV
+# %%
 csv_path = os.path.join(BASE_DIR, "model/eval_results.csv")
 write_header = not os.path.exists(csv_path)
 
@@ -574,3 +570,5 @@ with open(csv_path, 'a', newline='') as csvfile:
         writer.writeheader()
     writer.writerow(csv_data)
 print(f"Results appended to CSV: {csv_path}")
+
+
