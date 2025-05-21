@@ -28,6 +28,8 @@ BATCH_ID = 3
 BATCH_SIZE = 32
 NUM_EPOCHS = 20
 LEARNING_RATE = 1e-4
+TRANS_WEIGHT = 1.5 
+ANGULAR_WEIGHT = 0.1
 IMG_SIZE = 224  # Required input size for ViT
 BASE_DIR = os.path.expanduser("~/SKRIPSI/SCRIPTS")
 DATASET_DIR = os.path.join(BASE_DIR, f"dataset/batch{BATCH_ID}")
@@ -73,7 +75,7 @@ def rotation_error(R_pred, R_gt):
     angle_rad = torch.acos(torch.clamp((trace - 1) / 2, -1, 1))
     return torch.rad2deg(angle_rad)
 
-def combined_loss(pred, target, trans_weight=1.0, rot_weight=1.0, angular_weight=0.1):
+def combined_loss(pred, target, trans_weight=TRANS_WEIGHT, rot_weight=1.0, angular_weight=ANGULAR_WEIGHT):
     # Split predictions and targets
     pred_trans, pred_rot = pred[:, :3], pred[:, 3:]
     target_trans, target_rot = target[:, :3], target[:, 3:]

@@ -1,45 +1,46 @@
-# Evaluation Results - Batch 2
+# Evaluation Results - Batch 2 - Model 1
 
 ## Training Configuration
 - Batch Size: 32
 - Epochs: 20
 - Learning Rate: 0.0001
+- Translation Weight : 1.5
+- Rotation Weight : 1.0
+- Angular Weight : 0.1
+- Patience : 3
 - Image Size: 224
 - Device: cuda
 - Optimizer : Adam
 
 ## Model Architecture
 - Backbone: ViT Base Patch16 224
-- Head: Linear(768->512->6)
+- Head: Linear(768->512->9)
 
 ## Evaluation Metrics
 
 ### Validation Set
-- Average Loss: 0.0587
-- Translation RMSE: 0.0295
-- Translation Accuracy: 0.03 cm
-- Rotation RMSE: 0.2339
-- Rotation Accuracy: 0.23°
+- Average Loss: 11.4909
+- Translation RMSE: 0.1890
+- Translation Accuracy: 0.19 cm
+- Rotation RMSE: 108.4415
+- Rotation Accuracy: 108.44°
 
 ### Test Set
-- Average Loss: 0.0657
-- Translation RMSE: 0.0293
-- Translation Accuracy: 0.03 cm
-- Rotation RMSE: 0.2500
-- Rotation Accuracy: 0.25°
+- Average Loss: 11.3900
+- Translation RMSE: 0.1902
+- Translation Accuracy: 0.19 cm
+- Rotation RMSE: 107.4032
+- Rotation Accuracy: 107.40°
 
 ## Dataset Statistics
 ### Training Set
 - Translation range: [-0.09, 0.34] m
-- Rotation magnitude range: [2.43, 2.43]
 
 ### Validation Set
 - Translation range: [-0.07, 0.33] m
-- Rotation magnitude range: [2.39, 2.39]
 
 ### Test Set
 - Translation range: [-0.10, 0.33] m
-- Rotation magnitude range: [2.42, 2.43]
 
 ## File Locations
 - Dataset Directory: /home/moreno/SKRIPSI/SCRIPTS/dataset/batch2
