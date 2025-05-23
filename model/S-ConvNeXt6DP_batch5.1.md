@@ -13,7 +13,7 @@
 - Optimizer : Adam
 
 ## Model Architecture
-- Backbone: Using ConvNeXt
+- Backbone: Using ConvNeXt V2 Nano @ 384
 - Head: Linear(768->512->9)
 
 ## Evaluation Metrics
