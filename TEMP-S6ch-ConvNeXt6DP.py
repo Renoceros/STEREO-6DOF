@@ -1,5 +1,6 @@
 # %% [markdown]
-# This is for training testing and validating,2x Shared weights stereo ConvNeXt V2 Model @ 224 for use in 6D single object prediction
+# This is for training testing and validating, Shared weights stereo ConvNeXt V2 Model @ 384 with custom 6ch input head
+# for use in 6D single object prediction
 # %% [markdown]
 # IMPORTS
 
@@ -29,24 +30,24 @@ from torch.utils.tensorboard import SummaryWriter
 # DCLRATIONS
 
 # %%
-# with open("GlobVar.json", "r") as file:
-#     gv = json.load(file)
+with open("GlobVar.json", "r") as file:
+    gv = json.load(file)
 
-# mod_id = gv['mod_id']
-mod_id = 1
+mod_id = gv['mod_id']
+
 BATCH_ID = 5
-BATCH_SIZE = 16
+BATCH_SIZE = 32
 NUM_EPOCHS = 20
 LEARNING_RATE = 1e-4
 TRANS_WEIGHT = 1.5
 ROTATION_WEIGHT = 1.0
 ANGULAR_WEIGHT = 0.1
 PATIENCE = 3
-IMG_SIZE = 224
+IMG_SIZE = 384
 BASE_DIR = os.path.expanduser("~/SKRIPSI/SCRIPTS")
 DATASET_DIR = os.path.join(BASE_DIR, f"dataset/batch{BATCH_ID}")
-MODEL_SAVE_PATH = os.path.join(BASE_DIR, f"model/S-SW-ConvNeXt6DP{BATCH_ID}.{mod_id}.pth")
-BEST_MODEL_PATH = os.path.join(BASE_DIR, f"model/BEST-S-SW-ConvNeXt6DP{BATCH_ID}.{mod_id}.pth")
+MODEL_SAVE_PATH = os.path.join(BASE_DIR, f"model/S6ch-ConvNeXt6DP{BATCH_ID}.{mod_id}.pth")
+BEST_MODEL_PATH = os.path.join(BASE_DIR, f"model/BEST-S6ch-ConvNeXt6DP{BATCH_ID}.{mod_id}.pth")
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -54,7 +55,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # DATASETCLASS
 
 # %%
-class StereoPoseDataset(Dataset):
+class Stereo6ChPoseDataset(Dataset):
     def __init__(self, csv_file, root_dir, transform=None):
         self.annotations = pd.read_csv(csv_file)
         self.root_dir = root_dir
@@ -68,13 +69,20 @@ class StereoPoseDataset(Dataset):
         image = Image.open(img_path).convert("RGB")
         width, height = image.size
         mid = width // 2
+
         imageL = image.crop((0, 0, mid, height))
         imageR = image.crop((mid, 0, width, height))
-        label = torch.tensor(self.annotations.iloc[idx, 1:].astype(np.float32).values)
+
         if self.transform:
-            imageL = self.transform(imageL)
-            imageR = self.transform(imageR)
-        return imageL, imageR, label
+            imageL = self.transform(imageL)  # (3, H, W)
+            imageR = self.transform(imageR)  # (3, H, W)
+
+        # Stack to make (6, H, W)
+        image6ch = torch.cat([imageL, imageR], dim=0)
+
+        label = torch.tensor(self.annotations.iloc[idx, 1:].astype(np.float32).values)
+        return image6ch, label
+
 
 # %% [markdown]
 # Conversions loss functions rmse yadaydadaydada
@@ -180,7 +188,7 @@ def get_dataloader(split):
     base_dir = os.path.join(DATASET_DIR, split)
     csv_path = os.path.join(base_dir, "labels.csv")
     images_dir = os.path.join(base_dir, "images")  # Updated to point to the actual image folder
-    dataset = StereoPoseDataset(csv_path, images_dir, transform=get_transform())
+    dataset = Stereo6ChPoseDataset(csv_path, images_dir, transform=get_transform())
     return DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=(split == "train"))
 
 
@@ -210,43 +218,62 @@ test_loader = get_dataloader("test")
 # Model Definitions
 
 # %%
-class StereoConvNeXt6DP(nn.Module):
+class ConvNeXt6DP6ch(nn.Module):
     def __init__(self):
-        super(StereoConvNeXt6DP, self).__init__()
+        super(ConvNeXt6DP6ch, self).__init__()
+
         self.backbone = timm.create_model(
-            "convnextv2_nano.fcmae_ft_in22k_in1k",
+            "convnextv2_nano.fcmae_ft_in22k_in1k_384",
             pretrained=True,
             features_only=False
         )
         self.backbone.head = nn.Identity()  # Remove classifier
-        self.pool = nn.AdaptiveAvgPool2d((1, 1))
+        self._inflate_input_channels()      # Apply patch here 👈
+
+        self.pool = nn.AdaptiveAvgPool2d((1, 1))  # Global Average Pooling
         self.flatten = nn.Flatten()
 
-        # Shared weights applied to both L & R
         self.head = nn.Sequential(
-            nn.Linear(640 * 2, 512),  # 640 * 2 because we're concatenating L+R
+            nn.Linear(640, 512),  # Output of convnextv2_nano is 640
             nn.ReLU(),
             nn.Linear(512, 9)
         )
 
-    def extract_features(self, x):
-        x = self.backbone.forward_features(x)
+    def _inflate_input_channels(self):
+        old_conv = self.backbone.stem[0]  # Get the first Conv2d layer
+
+        new_conv = nn.Conv2d(
+            in_channels=6,  # Accept stereo (6-channel)
+            out_channels=old_conv.out_channels,
+            kernel_size=old_conv.kernel_size,
+            stride=old_conv.stride,
+            padding=old_conv.padding,
+            bias=old_conv.bias is not None
+        )
+
+        with torch.no_grad():
+            # Copy weights: L (first 3) and R (second 3) both get pretrained weights
+            new_conv.weight[:, :3] = old_conv.weight.clone()
+            new_conv.weight[:, 3:] = old_conv.weight.clone()
+
+            if old_conv.bias is not None:
+                new_conv.bias.copy_(old_conv.bias)
+
+        self.backbone.stem[0] = new_conv  # Replace first conv layer
+
+    def forward(self, x):
+        x = self.backbone.forward_features(x)  # Extract features
         x = self.pool(x)
         x = self.flatten(x)
-        return x
+        return self.head(x)
 
-    def forward(self, xL, xR):
-        fL = self.extract_features(xL)
-        fR = self.extract_features(xR)
-        f = torch.cat([fL, fR], dim=1)
-        return self.head(f)
 
 
 # %% [markdown]
 # The setup
 
 # %%
-model = StereoConvNeXt6DP().to(DEVICE)  # Use the updated model class
+model = ConvNeXt6DP6ch().to(DEVICE)  # Use the updated model class
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2)
 
@@ -255,13 +282,14 @@ scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2)
 
 # %%
 def train(validate=True, resume_from_checkpoint=False):
-    writer = SummaryWriter(log_dir=os.path.join(BASE_DIR, f"runs/S-SW-ConvNeXt6DP_batch{BATCH_ID}.{mod_id}"))
+    writer = SummaryWriter(log_dir=os.path.join(BASE_DIR, f"runs/S6ch-ConvNeXt6DP_batch{BATCH_ID}.{mod_id}"))
     scaler = GradScaler()
     best_val_loss = float('inf')
     epochs_no_improve = 0
     start_epoch = 0
     now = []
 
+    # Resume from checkpoint if specified
     if resume_from_checkpoint:
         checkpoint = torch.load(MODEL_SAVE_PATH)
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -271,25 +299,30 @@ def train(validate=True, resume_from_checkpoint=False):
         epochs_no_improve = checkpoint.get('epochs_no_improve', 0)
         start_epoch = checkpoint.get('epoch', 0)
         print(f"✅ Resumed from checkpoint at epoch {start_epoch}")
+
+        # Fill 'now' with dummy values to prevent indexing errors
         now = [0.0] * (start_epoch + 1)
 
+    # Ensure initial timestamp for timing
     if len(now) <= start_epoch:
         now.append(time.time())
     else:
         now[start_epoch] = time.time()
 
     for epoch in range(start_epoch, NUM_EPOCHS):
-        print(f"\n📦 EPOCH : {epoch + 1}")
+        print("\n")
+        print(f"📦 EPOCH : {epoch + 1}")
         model.train()
         train_loss = 0.0
         pbar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{NUM_EPOCHS}", leave=False)
 
-        for imageL, imageR, labels in pbar:
-            imageL, imageR, labels = imageL.to(DEVICE), imageR.to(DEVICE), labels.to(DEVICE)
-            optimizer.zero_grad(set_to_none=True)
+        for images, labels in pbar:
+            images = images.to(DEVICE)
+            labels = labels.to(DEVICE)
 
+            optimizer.zero_grad(set_to_none=True)
             with autocast(device_type="cuda"):
-                outputs = model(imageL, imageR)
+                outputs = model(images)
                 loss = combined_loss(outputs, labels, TRANS_WEIGHT, ROTATION_WEIGHT, ANGULAR_WEIGHT)
 
             scaler.scale(loss).backward()
@@ -300,18 +333,17 @@ def train(validate=True, resume_from_checkpoint=False):
             pbar.set_postfix({"Loss": loss.item()})
 
         avg_train_loss = train_loss / len(train_loader)
-        now.append(time.time())
+        now.append(time.time())  # Append after epoch finishes
         print(f"✅ Epoch {epoch + 1} Avg Training Loss: {avg_train_loss:.4f}")
         print(f"⏱️ Time per epoch {epoch + 1}: {int(now[epoch + 1] - now[epoch])}s")
 
-        # Log training loss
-        writer.add_scalar("Loss/Train", avg_train_loss, epoch)
-
+        # Apply unstructured pruning every 5 epochs (skip epoch 0)
         if epoch != 0 and epoch % 5 == 0:
             parameters_to_prune = [
-                (m, 'weight') for m in model.modules()
-                if isinstance(m, (nn.Linear, nn.Conv2d)) and hasattr(m, 'weight')
+                (module, 'weight') for module in model.modules()
+                if isinstance(module, (nn.Linear, nn.Conv2d)) and hasattr(module, 'weight')
             ]
+
             if parameters_to_prune:
                 prune.global_unstructured(
                     parameters_to_prune,
@@ -319,6 +351,8 @@ def train(validate=True, resume_from_checkpoint=False):
                     amount=0.1
                 )
                 print(f"⚠️ Pruning applied at epoch {epoch}")
+            else:
+                print(f"⚠️ Skipping pruning: No eligible parameters found at epoch {epoch}")
 
         if validate:
             model.eval()
@@ -326,9 +360,10 @@ def train(validate=True, resume_from_checkpoint=False):
             total_trans_rmse, total_rot_rmse = 0.0, 0.0
 
             with torch.no_grad():
-                for imageL, imageR, labels in val_loader:
-                    imageL, imageR, labels = imageL.to(DEVICE), imageR.to(DEVICE), labels.to(DEVICE)
-                    outputs = model(imageL, imageR)
+                for images, labels in val_loader:
+                    images = images.to(DEVICE)
+                    labels = labels.to(DEVICE)
+                    outputs = model(images)
 
                     loss = combined_loss(outputs, labels, TRANS_WEIGHT, ROTATION_WEIGHT, ANGULAR_WEIGHT)
                     val_loss += loss.item()
@@ -344,13 +379,9 @@ def train(validate=True, resume_from_checkpoint=False):
             print(f"📉 Validation Loss: {avg_val_loss:.4f}")
             print(f"📐 RMSE - Translation: {avg_trans_rmse:.4f}, Rotation: {avg_rot_rmse:.4f}")
 
-            # Log validation stats
-            writer.add_scalar("Loss/Val", avg_val_loss, epoch)
-            writer.add_scalar("RMSE/Translation", avg_trans_rmse, epoch)
-            writer.add_scalar("RMSE/Rotation", avg_rot_rmse, epoch)
-
             scheduler.step(avg_val_loss)
 
+            # Save best model if validation improves
             if epoch != 0 and avg_val_loss < best_val_loss:
                 best_val_loss = avg_val_loss
                 epochs_no_improve = 0
@@ -362,14 +393,17 @@ def train(validate=True, resume_from_checkpoint=False):
                     'epochs_no_improve': epochs_no_improve,
                     'epoch': epoch + 1
                 }, BEST_MODEL_PATH)
-                print(f"💾 Best model saved to: {BEST_MODEL_PATH}")
+                print(f"Model saved to: {BEST_MODEL_PATH}")
+                print("💾 Best model saved.")
             else:
                 epochs_no_improve += 1
                 print(f"📉 No improvement ({epochs_no_improve}/{PATIENCE})")
+
                 if epochs_no_improve >= PATIENCE:
                     print("⏹️ Early stopping triggered")
                     break
 
+        # Always save last checkpoint
         torch.save({
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
@@ -378,27 +412,26 @@ def train(validate=True, resume_from_checkpoint=False):
             'epochs_no_improve': epochs_no_improve,
             'epoch': epoch + 1
         }, MODEL_SAVE_PATH)
-        print(f"💾 Checkpoint saved to: {MODEL_SAVE_PATH}")
-
+        print(f"Model saved to: {MODEL_SAVE_PATH}")
     writer.close()
 
 # %% [markdown]
 # Actually training
 
 # %%
-train(validate=True,resume_from_checkpoint=False)
+train(validate=True,resume_from_checkpoint=True)
 
 # %% [markdown]
 # Update
 
 # %%
-# gv['mod_id'] += 1
-# with open("GlobVar.json", "w") as file:
-#     json.dump(gv, file, indent=4)
-# print("mod_id updated in GlobVar.json")
-mod_id += 1
+gv['mod_id'] += 1
+with open("GlobVar.json", "w") as file:
+    json.dump(gv, file, indent=4)
+print("mod_id updated in GlobVar.json")
+
 # %%
-CLEAN_MODEL_PATH = os.path.join(BASE_DIR, f"model/CLEAN-S-SW-ConvNeXt6DP{BATCH_ID}.{mod_id}.pth")
+CLEAN_MODEL_PATH = os.path.join(BASE_DIR, f"model/CLEAN-S6ch-ConvNeXt6DP{BATCH_ID}.{mod_id}.pth")
 for name, module in model.named_modules():
     if isinstance(module, torch.nn.Conv2d) or isinstance(module, torch.nn.Linear):
         if hasattr(module, "weight_orig"):
@@ -418,23 +451,21 @@ def test_model(model, loader, mode='Test', use_amp=False):
     all_preds, all_gts = [], []
 
     with torch.no_grad():
-        for imageL,imageR, labels in tqdm(loader, desc=f"Running {mode}"):
-            imageL = imageL.to(DEVICE)
-            imageR = imageR.to(DEVICE)
+        for images, labels in tqdm(loader, desc=f"Running {mode}"):
+            images = images.to(DEVICE)
             labels = labels.to(DEVICE)
 
             start_time = time.time()
 
             if use_amp:
                 with autocast(device_type="cuda"):
-                    outputs = model(imageL, imageR)
-
+                    outputs = model(images)
                     loss = combined_loss(outputs, labels, TRANS_WEIGHT, ROTATION_WEIGHT, ANGULAR_WEIGHT)
             else:
-                outputs = model(imageL, imageR)
+                outputs = model(images)
                 loss = combined_loss(outputs, labels, TRANS_WEIGHT, ROTATION_WEIGHT, ANGULAR_WEIGHT)
 
-            inference_time = (time.time() - start_time) * 1000 / imageL.size(0)  # ms per image
+            inference_time = (time.time() - start_time) * 1000 / images.size(0)  # ms per image
             inference_times.append(inference_time)
 
             total_loss += loss.item()
@@ -483,20 +514,19 @@ def validate_model(model_path=None):
     all_preds, all_gts = [], []
 
     with torch.no_grad():
-        for imageL,imageR, labels in tqdm(val_loader, desc="Running Validation"):
+        for images, labels in tqdm(val_loader, desc="Running Validation"):
             # Move to device FIRST
-            imageL = imageL.to(DEVICE)
-            imageR = imageR.to(DEVICE)
+            images = images.to(DEVICE)
             labels = labels.to(DEVICE)
 
             start_time = time.time()
 
             with autocast(device_type="cuda"):  # Optional for mixed precision inference
-                outputs = model(imageL, imageR)
+                outputs = model(images)
                 loss = combined_loss(outputs, labels, TRANS_WEIGHT, ROTATION_WEIGHT, ANGULAR_WEIGHT)
 
-            inference_time = (time.time() - start_time) * 1000 / imageL.size(0)  # ms per image
-            inference_times.append(inference_time) #avg the 2 out lmao
+            inference_time = (time.time() - start_time) * 1000 / images.size(0)  # ms per image
+            inference_times.append(inference_time)
 
             total_loss += loss.item()
             trans_rmse, rot_rmse = compute_errors(outputs, labels)
@@ -546,7 +576,7 @@ val_rot_accuracy_pct = 100*(1-(val_rot_accuracy.item()/360))
 # Write MD
 
 # %%
-eval_path = os.path.join(BASE_DIR, f"model/S-SW-ConvNeXt6DP_batch{BATCH_ID}.{mod_id}.md")
+eval_path = os.path.join(BASE_DIR, f"model/S6ch-ConvNeXt6DP_batch{BATCH_ID}.{mod_id}.md")
 eval_content = f"""# Evaluation Results - Batch {BATCH_ID} - Model {mod_id}
 
 ## Training Configuration
@@ -562,8 +592,8 @@ eval_content = f"""# Evaluation Results - Batch {BATCH_ID} - Model {mod_id}
 - Optimizer : Adam
 
 ## Model Architecture
-- Backbone: Using ConvNeXt V2 Nano @ 224 x2 shared weights
-- Head: Linear(1280 → 512 → 9) (640 * 2)
+- Backbone: Using ConvNeXt V2 Nano @ 348 with modified head to accept 6ch input
+- Head: Linear(768->512->9)
 
 ## Evaluation Metrics
 

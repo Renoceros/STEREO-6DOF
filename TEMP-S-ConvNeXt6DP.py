@@ -1,4 +1,6 @@
 # %% [markdown]
+# This is for training testing and validating, ConvNeXt V2 Model @ 384 for use in 6D single object prediction
+# %% [markdown]
 # IMPORTS
 
 # %%
@@ -21,6 +23,7 @@ import datetime
 from tqdm import tqdm
 from typing import Tuple
 from torch.amp import GradScaler, autocast
+from torch.utils.tensorboard import SummaryWriter
 
 # %% [markdown]
 # DCLRATIONS
@@ -240,6 +243,7 @@ scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2)
 
 # %%
 def train(validate=True, resume_from_checkpoint=False):
+    writer = SummaryWriter(log_dir=os.path.join(BASE_DIR, f"runs/S-ConvNeXt6DP_batch{BATCH_ID}.{mod_id}"))
     scaler = GradScaler()
     best_val_loss = float('inf')
     epochs_no_improve = 0
@@ -370,6 +374,7 @@ def train(validate=True, resume_from_checkpoint=False):
             'epoch': epoch + 1
         }, MODEL_SAVE_PATH)
         print(f"Model saved to: {MODEL_SAVE_PATH}")
+    writer.close()
 
 
 # %% [markdown]
@@ -533,7 +538,7 @@ val_rot_accuracy_pct = 100*(1-(val_rot_accuracy.item()/360))
 # Write MD
 
 # %%
-eval_path = os.path.join(BASE_DIR, f"model/ConvNeXt6DP_batch{BATCH_ID}.{mod_id}.md")
+eval_path = os.path.join(BASE_DIR, f"model/S-ConvNeXt6DP_batch{BATCH_ID}.{mod_id}.md")
 eval_content = f"""# Evaluation Results - Batch {BATCH_ID} - Model {mod_id}
 
 ## Training Configuration
