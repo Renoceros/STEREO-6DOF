@@ -1,4 +1,5 @@
-/dataset/
+/dataset/*/
+/skripsi/
 /video/
 /image/preprocessed/
 /calibration_images/
@@ -6,7 +7,3 @@
 /venv/
 /development/
 /rect_test/
-*.pth
-/model/
-/skirpsi/
-/skripsi/*/

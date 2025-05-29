@@ -2,7 +2,6 @@
 from datetime import datetime
 import json
 import os
-import winsound
 import cv2
 import numpy as np
 
@@ -15,7 +14,6 @@ def OpenCam(video_source=0,fw=1280,fh=480):
     orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     print(f"Video resolution: {orig_width}x{orig_height}")
-    Ding()
     return cap, orig_width, orig_height
 
 def LoJ(key,json_path):
@@ -52,13 +50,6 @@ def load_calibration(JSON_PATH = "camera_calibration_results.json"):
 
 # ===== Nice to haves functions =====
 
-def Ding():
-    winsound.MessageBeep(winsound.MB_ICONASTERISK)
-    return
-
-def Deng():
-    winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
-    return
 
 def Current():
     current = datetime.now()
