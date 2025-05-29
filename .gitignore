@@ -6,3 +6,7 @@
 /venv/
 /development/
 /rect_test/
+*.pth
+/model/
+/skirpsi/
+/skripsi/*/
