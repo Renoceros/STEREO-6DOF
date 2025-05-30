@@ -6,141 +6,142 @@
         - back.png
         - bottom.png
         - front.png
-        - ... (3 more .png)
-    __pycache__/
-        - aruco_box_pose_estimation.cpython-311.pyc
-        - aruco_pose_estimation.cpython-311.pyc
-    calibration_images/
-        - cb.png
-        - checkerboard.pdf
-    capture/
-        left/
-        right/
-        together/
-    dataset/
-        batch1/
-            test/
-                images/
-                    - frame_0001.png
-                    - frame_0004.png
-                    - frame_0006.png
-                    - ... (411 more .png)
-                - labels.csv
-            train/
-                images/
-                    - frame_0000.png
-                    - frame_0002.png
-                    - frame_0003.png
-                    - ... (960 more .png)
-                - labels.csv
-            unsplit/
-                images/
-                    - frame_0000.png
-                    - frame_0001.png
-                    - frame_0002.png
-                    - ... (1374 more .png)
-                - labels.csv
-            val/
-                images/
-                - labels.csv
-            - metadata.md
-        batch2/
-            test/
-                images/
-                    - frame_0003.png
-                    - frame_0004.png
-                    - frame_0009.png
-                    - ... (2037 more .png)
-                - labels.csv
-            train/
-                images/
-                    - frame_0000.png
-                    - frame_0001.png
-                    - frame_0002.png
-                    - ... (4756 more .png)
-                - labels.csv
-            unsplit/
-                images/
-                    - frame_0000.png
-                    - frame_0001.png
-                    - frame_0002.png
-                    - ... (6796 more .png)
-                - labels.csv
-            val/
-                images/
-                - labels.csv
-            - metadata.md
-    depricated/ [skipped]
-    development/
-        left/
-            - left_00.jpg
-            - left_01.jpg
-            - left_02.jpg
-            - ... (25 more .jpg)
-        right/
-            - right_28.jpg
-            - right_29.jpg
-            - right_30.jpg
-            - ... (32 more .jpg)
-        steps/
-            - left_corners_00.png
-            - left_corners_01.png
-            - left_corners_02.png
-            - ... (166 more .png)
-        together/
-            - together_63.jpg
-            - together_64.jpg
-            - together_65.jpg
-            - ... (21 more .jpg)
-        unused/
-            - IMG_6106_rectified_left.png
-            - IMG_6106_rectified_right.png
-            - IMG_6110_rectified_left.png
-            - ... (55 more .png)
-    rect_test/
-        - LR_0001.png
-        - LR_0002.png
-        - LR_0003.png
-        - ... (37 more .png)
+        - left.png
+        - right.png
+        - ... (1 more .png)
+    __pycache__/ [skipped]
+    dataset/ [skipped]
+    model/
+        - .~lock.EVAL.xlsx#
+        - BEST-S-ConvNeXt6DP5.1.pth
+        - BEST-S-ConvNeXt6DP5.2.pth
+        - BEST-S-ConvNeXt6DP5.3.pth
+        - BEST-S-ConvNeXt6DP6.1.pth
+        - BEST-S-ConvNeXt6DP7.1.pth
+        - BEST-S-ConvNeXt6DP7.2.pth
+        - BEST-S-ConvNeXt6DP7.3.pth
+        - BEST-S-ConvNeXt6DP7.4.pth
+        - BEST-S-ConvNeXt6DP7.5.pth
+        - BEST-S-SW-ConvNeXt6DP7.7.pth
+        - BEST-S6ch-ConvNeXt6DP6.2.pth
+        - BEST-S6ch-ConvNeXt6DP6.3.pth
+        - BEST-S6ch-ConvNeXt6DP7.6.pth
+        - CLEAN-S-ConvNeXt6DP5.1.pth
+        - CLEAN-S-ConvNeXt6DP5.2.pth
+        - CLEAN-S-ConvNeXt6DP5.3.pth
+        - CLEAN-S-ConvNeXt6DP6.1.pth
+        - CLEAN-S-ConvNeXt6DP7.1.pth
+        - CLEAN-S-ConvNeXt6DP7.2.pth
+        - CLEAN-S-ConvNeXt6DP7.3.pth
+        - CLEAN-S-ConvNeXt6DP7.4.pth
+        - CLEAN-S-ConvNeXt6DP7.5.pth
+        - CLEAN-S-SW-ConvNeXt6DP7.7.pth
+        - CLEAN-S6ch-ConvNeXt6DP6.2.pth
+        - CLEAN-S6ch-ConvNeXt6DP6.3.pth
+        - CLEAN-S6ch-ConvNeXt6DP7.6.pth
+        - S-ConvNeXt6DP5.1.pth
+        - S-ConvNeXt6DP5.2.pth
+        - S-ConvNeXt6DP5.3.pth
+        - S-ConvNeXt6DP6.1.pth
+        - S-ConvNeXt6DP7.1.pth
+        - S-ConvNeXt6DP7.2.pth
+        - S-ConvNeXt6DP7.3.pth
+        - S-ConvNeXt6DP7.4.pth
+        - S-ConvNeXt6DP7.5.pth
+        - S-SW-ConvNeXt6DP7.7.pth
+        - S6ch-ConvNeXt6DP6.2.pth
+        - S6ch-ConvNeXt6DP6.3.pth
+        - S6ch-ConvNeXt6DP7.6.pth
+        - EVAL.ods
+        - EVAL.xlsx
+        - S-ConvNeXt6DP_batch5.1.md
+        - S-ConvNeXt6DP_batch5.2.md
+        - S-ConvNeXt6DP_batch5.3.md
+        - S-ConvNeXt6DP_batch6.1.md
+        - S-ConvNeXt6DP_batch6.2.md
+        - S-ConvNeXt6DP_batch6.3.md
+        - S-ConvNeXt6DP_batch7.1.md
+        - S-ConvNeXt6DP_batch7.2.md
+        - S-ConvNeXt6DP_batch7.3.md
+        - S-ConvNeXt6DP_batch7.4.md
+        - S-ConvNeXt6DP_batch7.5.md
+        - S-ConvNeXt6DP_batch7.6.md
+        - S-SW-ConvNeXt6DP_batch7.7.md
+        - eval_results.csv
+    runs/
+        S-ConvNeXt6DP_batch1.6/
+            - events.out.tfevents.1748073203.moreno-A620MS.14079.0
+        S-ConvNeXt6DP_batch5.2/
+            - events.out.tfevents.1748182299.moreno-A620MS.163420.0
+            - events.out.tfevents.1748187017.moreno-A620MS.230185.0
+            - events.out.tfevents.1748187049.moreno-A620MS.230185.1
+        S-ConvNeXt6DP_batch5.3/
+            - events.out.tfevents.1748183875.moreno-A620MS.199603.0
+        S-ConvNeXt6DP_batch6.1/
+            - events.out.tfevents.1748073633.moreno-A620MS.18921.0
+            - events.out.tfevents.1748075398.moreno-A620MS.2791.0
+            - events.out.tfevents.1748078285.moreno-A620MS.23657.0
+            - events.out.tfevents.1748078402.moreno-A620MS.25452.0
+            - events.out.tfevents.1748078485.moreno-A620MS.26617.0
+            - ... (1 more .0)
+            - events.out.tfevents.1748075421.moreno-A620MS.2791.1
+            - events.out.tfevents.1748078415.moreno-A620MS.25452.1
+        S-ConvNeXt6DP_batch7.1/
+            - events.out.tfevents.1748039868.moreno-A620MS.183368.0
+            - events.out.tfevents.1748039896.moreno-A620MS.183368.1
+        S-ConvNeXt6DP_batch7.2/
+            - events.out.tfevents.1748044258.moreno-A620MS.211783.0
+        S-ConvNeXt6DP_batch7.3/
+            - events.out.tfevents.1748048317.moreno-A620MS.236120.0
+            - events.out.tfevents.1748050526.moreno-A620MS.251058.0
+        S-ConvNeXt6DP_batch7.4/
+            - events.out.tfevents.1748060842.moreno-A620MS.251058.1
+        S-ConvNeXt6DP_batch7.5/
+            - events.out.tfevents.1748061808.moreno-A620MS.327935.0
+        S-ConvNeXt6DP_batch7.7/
+            - events.out.tfevents.1748177014.moreno-A620MS.116986.0
+        S-SW-ConvNeXt6DP_batch7.7/
+            - events.out.tfevents.1748177241.moreno-A620MS.131929.0
+        S6ch-ConvNeXt6DP_batch6.2/
+            - events.out.tfevents.1748086664.moreno-A620MS.132379.0
+        S6ch-ConvNeXt6DP_batch6.3/
+            - events.out.tfevents.1748163428.moreno-A620MS.11508.0
+        S6ch-ConvNeXt6DP_batch7.6/
+            - events.out.tfevents.1748091948.moreno-A620MS.199534.0
+    skripsi/ [skipped]
+    streamlit/
+        - app.py
     utility/
-        __pycache__/
-            - __init__.cpython-311.pyc
-            - stereo_utils.cpython-311.pyc
+        __pycache__/ [skipped]
         - __init__.py
+        - rotation_utils.py
         - stereo_utils.py
-    venv/ [skipped]
-    video/
-        preprocessed/
-            BATCH_0/
-                - Left.avi
-                - Right.avi
-            BATCH_1/
-                - Left.avi
-                - Right.avi
-            BATCH_3/
-                - Left.avi
-                - Right.avi
-            BATCH_4/
-        raw/
-            - ArUco.avi
-            - ArUco2.avi
-            - ArUcoCom.avi
-            - ... (3 more .avi)
-            - IMG_6104.jpg
-            - IMG_6105.jpg
-            - IMG_6106.jpg
-            - ... (7 more .jpg)
-            - dataset.mp4
-        temp/
+    video/ [skipped]
     - .gitattributes
     - .gitignore
+    - DEPRICATED_VIT6DP.ipynb
+    - S-ConvNeXt6DP.ipynb
+    - S-SW-ConvNeXt6DP.ipynb
+    - S6ch-ConvNeXt6DP.ipynb
+    - ViT6DP_2.0.ipynb
+    - aruco_dataset_builder_splitter.ipynb
+    - development.ipynb
+    - development_calibration.ipynb
+    - showEval.ipynb
     - GlobVar.json
     - camera_calibration_results.json
     - development_calibration.json
-    - ... (1 more .json)
+    - face_axes.JSON
     - STRUCT.txt
     - structure.txt
+    - tunnel.txt
+    - TEMP-S-ConvNeXt6DP.py
+    - TEMP-S-SW-ConvNeXt6DP.py
+    - TEMP-S6ch-ConvNeXt6DP.py
+    - ViT6DP.py
+    - aruco_box_o3d.py
     - aruco_box_pose_estimation.py
+    - aruco_dataset_builder_splitter.py
     - aruco_gen.py
     - aruco_pose_estimation.py
     - calibration_capture_images.py
@@ -157,9 +158,9 @@
     - stereo_test_5.py
     - stereo_to_kitti.py
     - structure.py
+    - test.py
+    - video_recorder.py
     - video_stitcher.py
-    - aruco_dataset_builder_splitter.ipynb
-    - development.ipynb
-    - development_calibration.ipynb
+    - activateBIH.sh
     - validation_left.jpg
     - validation_right.jpg

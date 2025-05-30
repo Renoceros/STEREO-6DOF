@@ -1,8 +1,8 @@
-timestamp,batch_id,total_frames,frame_step,train_count,val_count,test_count,tr_val_test_ratio,pose_method,pose_normalization
-2025-05-12 23:20:33,1,2283,3,1598,228,457,70:10:20,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
-2025-05-12 23:23:37,2,6799,1,4759,679,1361,70:10:20,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
-2025-05-13 00:36:54,3,6799,1,4079,1359,1361,60:20:20,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
-2025-05-13 04:49:34,4,6799,1,5439,679,681,80:10:10,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
-2025-05-21 22:26:09,5,21711,1,17368,2171,2172,80:10:10,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
-2025-05-24 05:10:56,6,14474,1,11579,1447,1448,80:10:10,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
-2025-05-24 05:18:41,7,7237,1,5789,723,725,80:10:10,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
+timestamp,batch_id,total_frames,frame_step,frame_aug,train_count,val_count,test_count,tr_val_test_ratio,pose_method,pose_normalization
+2025-05-12 23:20:33,1,2283,3,0,1598,228,457,70:10:20,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
+2025-05-12 23:23:37,2,6799,1,0,4759,679,1361,70:10:20,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
+2025-05-13 00:36:54,3,6799,1,0,4079,1359,1361,60:20:20,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
+2025-05-13 04:49:34,4,6799,1,0,5439,679,681,80:10:10,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
+2025-05-21 22:26:09,5,21711,1,2,17368,2171,2172,80:10:10,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
+2025-05-24 05:10:56,6,14474,1,1,11579,1447,1448,80:10:10,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation
+2025-05-24 05:18:41,7,7237,1,0,5789,723,725,80:10:10,ArUco-based 6DoF Pose Estimation,Zhou 6D Rotation Representation

@@ -1,10 +1,10 @@
 import os
 from collections import defaultdict
 
-MAX_FILES_PER_TYPE = 3
+MAX_FILES_PER_TYPE = 5
 OUTPUT_FILE = "STRUCT.txt"
-DONTCRAWL = {"depricated","video/preprocessed","venv",".git"}  # <- folders to skip (add more if needed)
-EXT_ALWAYS_SHOW = {".py", ".ipynb"}
+DONTCRAWL = {"depricated","video/preprocessed","venv",".git","dataset","skripsi", "__pycache__","video"}  # <- folders to skip (add more if needed)
+EXT_ALWAYS_SHOW = {".py", ".ipynb",".pth",".md"}
 
 def format_dir_tree(root_dir):
     lines = []
