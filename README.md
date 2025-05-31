@@ -32,7 +32,7 @@ There are **three main architectural variants**, each targeting stereo informati
 * 640→256→128→9 head (default)
 * Acts as the baseline
 
-###  DOUBLE
+###  SW-TWIN
 
 * **Shared-weight twin-image model**
 * Splits stereo image into L/R views
