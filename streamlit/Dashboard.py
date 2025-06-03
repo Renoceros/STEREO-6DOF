@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+import seaborn as sns
 
 # ==== CONFIGURATION ====
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -61,6 +62,28 @@ def load_metadata_md(batch_id):
             return file.read()
     return None
 
+def plot_correlation_heatmap(data, title="Correlation Heatmap"):
+    corr = data.corr(numeric_only=True)
+    fig, ax = plt.subplots(figsize=(12, 8))
+    sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f", ax=ax)
+    ax.set_title(title)
+    st.pyplot(fig)
+
+
+def plot_scatter(df, x, y, hue=None):
+    fig, ax = plt.subplots()
+    sns.scatterplot(data=df, x=x, y=y, hue=hue, palette="tab10", ax=ax)
+    ax.set_title(f"{y} vs {x}" + (f" (hue={hue})" if hue else ""))
+    st.pyplot(fig)
+
+
+def plot_grouped_line(df, x, y, groupby):
+    grouped = df.groupby([groupby, x])[y].mean().reset_index()
+    fig, ax = plt.subplots()
+    sns.lineplot(data=grouped, x=x, y=y, hue=groupby, marker="o", ax=ax)
+    ax.set_title(f"{y} vs {x} grouped by {groupby}")
+    st.pyplot(fig)
+
 
 # ==== STREAMLIT UI ====
 st.title("Dashboard : 6D Pose Model and Dataset Evaluation ")
@@ -110,6 +133,45 @@ with tab3:
         Each variant has been tested with different input resolutions (224 and 384), head architectures (e.g., 640→512→9 or 640→256→128→9), and batch sizes to explore the trade-offs in accuracy, VRAM usage, and training speed.
         Some variants are dropped after a couple of runs because of very poor performace in n-epoch compared to the others.
         """)
+        st.markdown("---")
+        st.subheader("🔧 Controls")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            x_var = st.selectbox("X-axis variable", df.columns, key="x_var")
+        with col2:
+            y_var = st.selectbox("Y-axis variable", df.columns, key="y_var")
+        with col3:
+            hue_var = st.selectbox("Color by (hue)", [None] + list(df.columns), key="hue_var")
+        with col4:
+            group_line = st.selectbox("Group line plots by", df.columns, key="group_line")
+
+        col5, col6 = st.columns(2)
+        with col5:
+            variant_filter = st.multiselect("Filter by VARIANT", sorted(df["VARIANT"].unique()), default=df["VARIANT"].unique())
+        with col6:
+            arch_filter = st.multiselect("Filter by HEAD_ARCH", sorted(df["HEAD_ARCH"].unique()), default=df["HEAD_ARCH"].unique())
+
+        # Filter data
+        filtered_df = df[
+            df["VARIANT"].isin(variant_filter) &
+            df["HEAD_ARCH"].isin(arch_filter)
+        ]
+
+        # ----------------- Visualizations
+        st.subheader("📊 Correlation Heatmap")
+        plot_correlation_heatmap(filtered_df)
+
+        st.subheader("📉 Scatter Plot")
+        plot_scatter(filtered_df, x_var, y_var, hue=hue_var)
+
+        st.subheader("📈 Line Plot (Grouped)")
+        try:
+            if x_var == "ID" or y_var == "ID" or group_line == "ID":
+                raise ValueError("ID is not a valid choice for grouped line plots.")
+            plot_grouped_line(filtered_df, x=x_var, y=y_var, groupby=group_line)
+        except Exception as e:
+            st.error("⚠️ Cannot generate line plot. Please change X/Y/Group to something other than 'ID'.")
+
     else:
         st.error("EVAL.xlsx not found in model/ directory")
 
