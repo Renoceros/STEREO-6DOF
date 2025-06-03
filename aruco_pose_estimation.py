@@ -6,7 +6,7 @@ import os
 import utility.stereo_utils as su
 
 # === CONFIG ===
-CAM_ID = 0
+CAM_ID = "video/raw/ArUco.mp4"
 CAM_WIDTH = 1280
 CAM_HEIGHT = 480
 MARKER_LENGTH_M = 0.0715  # 7.15cm marker width
@@ -226,24 +226,24 @@ def draw_face_axes(img, mtx, dist, rvec, tvec, face_name):
     cv2.putText(img, '+Z', tuple(imgpts[5].ravel().astype(int)), font, 0.4, (255,0,0), 1)
 
 if __name__ == "__main__":
-    su.Ding()
+    # su.Ding()
     print("=== Starting ArUco Pose Estimation ===")
     
     face_id_map = Build_Face_ID_Map()
     if not face_id_map:
-        su.Deng()
+        # su.Deng()
         raise RuntimeError("No valid markers found in ArUco directory")
     
     cap, _, _ = su.OpenCam(CAM_ID)
     if not cap.isOpened():
-        su.Deng()
+        # su.Deng()
         raise RuntimeError("Failed to open camera")
     
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
-                su.Deng()
+                # su.Deng()
                 print("Camera feed ended")
                 break
                 

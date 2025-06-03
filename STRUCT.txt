@@ -1,5 +1,7 @@
 ./
     .git/ [skipped]
+    .streamlit/
+        - config.toml
     ArUco/
         - Aruco print.pdf
         - Marker Instructions.md
@@ -12,7 +14,13 @@
     __pycache__/ [skipped]
     dataset/ [skipped]
     model/
-        - .~lock.EVAL.xlsx#
+        baked/
+            - CLEAN-S-ConvNeXt6DP5.2.pt
+            - CLEAN-S-ConvNeXt6DP5.3.pt
+            - CLEAN-S-ConvNeXt6DP6.1.pt
+            - CLEAN-S-ConvNeXt6DP7.5.pt
+            - CLEAN-S6ch-ConvNeXt6DP6.2.pt
+            - ... (2 more .pt)
         - BEST-S-ConvNeXt6DP5.1.pth
         - BEST-S-ConvNeXt6DP5.2.pth
         - BEST-S-ConvNeXt6DP5.3.pth
@@ -59,14 +67,14 @@
         - S-ConvNeXt6DP_batch5.3.md
         - S-ConvNeXt6DP_batch6.1.md
         - S-ConvNeXt6DP_batch6.2.md
-        - S-ConvNeXt6DP_batch6.3.md
         - S-ConvNeXt6DP_batch7.1.md
         - S-ConvNeXt6DP_batch7.2.md
         - S-ConvNeXt6DP_batch7.3.md
         - S-ConvNeXt6DP_batch7.4.md
         - S-ConvNeXt6DP_batch7.5.md
-        - S-ConvNeXt6DP_batch7.6.md
         - S-SW-ConvNeXt6DP_batch7.7.md
+        - S6ch-ConvNeXt6DP_batch6.3.md
+        - S6ch-ConvNeXt6DP_batch7.6.md
         - eval_results.csv
     runs/
         S-ConvNeXt6DP_batch1.6/
@@ -110,10 +118,14 @@
             - events.out.tfevents.1748091948.moreno-A620MS.199534.0
     skripsi/ [skipped]
     streamlit/
-        - app.py
+        - Dashboard.py
+        - Documentation.py
+        - Home.py
+        - Implementation.py
     utility/
         __pycache__/ [skipped]
         - __init__.py
+        - inference_model.py
         - rotation_utils.py
         - stereo_utils.py
     video/ [skipped]
@@ -132,6 +144,7 @@
     - camera_calibration_results.json
     - development_calibration.json
     - face_axes.JSON
+    - README.md
     - STRUCT.txt
     - structure.txt
     - tunnel.txt
@@ -139,11 +152,13 @@
     - TEMP-S-SW-ConvNeXt6DP.py
     - TEMP-S6ch-ConvNeXt6DP.py
     - ViT6DP.py
+    - app.py
     - aruco_box_o3d.py
     - aruco_box_pose_estimation.py
     - aruco_dataset_builder_splitter.py
     - aruco_gen.py
     - aruco_pose_estimation.py
+    - baker.py
     - calibration_capture_images.py
     - checkerboard_gen.py
     - development.py
