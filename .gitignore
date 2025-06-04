@@ -4,7 +4,7 @@
 /image/preprocessed/
 /calibration_images/
 /depricated/
-/venv/
+/.venv/
 /development/
 /rect_test/
 *.pth

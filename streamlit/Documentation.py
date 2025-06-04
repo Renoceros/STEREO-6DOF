@@ -8,6 +8,12 @@ st.markdown("""
 ---
 ## 6D Pose Estimation with Stereo ConvNeXt
 This project explores **6D pose estimation** using stereo images and **ConvNeXt V2 Nano** backbones. It compares different architectural approaches—including single-image, twin-view shared-weight, and early fusion methods—while logging evaluation metrics and training performance for rigorous experimentation.
+            
+CRUCIAL STEP
+1. Open the GitHub Repo
+2. curl, wget, whatever, download ZIP
+3. cd to the project dircectory
+4. make a venv, python 3.12, and do pip install requirement.txt
 
 ---
 
