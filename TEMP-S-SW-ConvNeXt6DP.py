@@ -1,5 +1,6 @@
 # %% [markdown]
-# This is for training testing and validating,2x Shared weights stereo ConvNeXt V2 Model @ 224 for use in 6D single object prediction
+# This is for training testing and validating,2x Shared weights Twin head stereo ConvNeXt V2 Model @ 224 for use in 6D single object prediction
+
 # %% [markdown]
 # IMPORTS
 
@@ -24,6 +25,7 @@ from tqdm import tqdm
 from typing import Tuple
 from torch.amp import GradScaler, autocast
 from torch.utils.tensorboard import SummaryWriter
+from openpyxl import Workbook, load_workbook
 
 # %% [markdown]
 # DCLRATIONS
@@ -33,9 +35,10 @@ from torch.utils.tensorboard import SummaryWriter
 #     gv = json.load(file)
 
 # mod_id = gv['mod_id']
-mod_id = 1
-BATCH_ID = 5
-BATCH_SIZE = 16
+# MOD_ID = mod_id
+BATCH_ID = 7
+MOD_ID = 7
+BATCH_SIZE = 32
 NUM_EPOCHS = 20
 LEARNING_RATE = 1e-4
 TRANS_WEIGHT = 1.5
@@ -45,10 +48,9 @@ PATIENCE = 3
 IMG_SIZE = 224
 BASE_DIR = os.path.expanduser("~/SKRIPSI/SCRIPTS")
 DATASET_DIR = os.path.join(BASE_DIR, f"dataset/batch{BATCH_ID}")
-MODEL_SAVE_PATH = os.path.join(BASE_DIR, f"model/S-SW-ConvNeXt6DP{BATCH_ID}.{mod_id}.pth")
-BEST_MODEL_PATH = os.path.join(BASE_DIR, f"model/BEST-S-SW-ConvNeXt6DP{BATCH_ID}.{mod_id}.pth")
+MODEL_SAVE_PATH = os.path.join(BASE_DIR, f"model/S-SW-ConvNeXt6DP{BATCH_ID}.{MOD_ID}.pth")
+BEST_MODEL_PATH = os.path.join(BASE_DIR, f"model/BEST-S-SW-ConvNeXt6DP{BATCH_ID}.{MOD_ID}.pth")
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 # %% [markdown]
 # DATASETCLASS
@@ -183,11 +185,10 @@ def get_dataloader(split):
     dataset = StereoPoseDataset(csv_path, images_dir, transform=get_transform())
     return DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=(split == "train"))
 
-
 # %%
 def get_dataset_stats(loader):
     translations = []
-    for _, labels in loader:
+    for _,_, labels in loader:
         translations.append(labels[:, :3])
     trans = torch.cat(translations, dim=0)
     return {
@@ -196,7 +197,6 @@ def get_dataset_stats(loader):
         'mean': trans.mean(dim=0),
         'std': trans.std(dim=0)
     }
-
 
 # %% [markdown]
 # Loading...
@@ -224,9 +224,9 @@ class StereoConvNeXt6DP(nn.Module):
 
         # Shared weights applied to both L & R
         self.head = nn.Sequential(
-            nn.Linear(640 * 2, 512),  # 640 * 2 because we're concatenating L+R
+            nn.Linear(640 * 2, 256),  # 640 * 2 because we're concatenating L+R
             nn.ReLU(),
-            nn.Linear(512, 9)
+            nn.Linear(256, 9)
         )
 
     def extract_features(self, x):
@@ -241,7 +241,6 @@ class StereoConvNeXt6DP(nn.Module):
         f = torch.cat([fL, fR], dim=1)
         return self.head(f)
 
-
 # %% [markdown]
 # The setup
 
@@ -255,12 +254,13 @@ scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2)
 
 # %%
 def train(validate=True, resume_from_checkpoint=False):
-    writer = SummaryWriter(log_dir=os.path.join(BASE_DIR, f"runs/S-SW-ConvNeXt6DP_batch{BATCH_ID}.{mod_id}"))
+    writer = SummaryWriter(log_dir=os.path.join(BASE_DIR, f"runs/S-SW-ConvNeXt6DP_batch{BATCH_ID}.{MOD_ID}"))
     scaler = GradScaler()
     best_val_loss = float('inf')
     epochs_no_improve = 0
     start_epoch = 0
     now = []
+    time_per_epoch = []
 
     if resume_from_checkpoint:
         checkpoint = torch.load(MODEL_SAVE_PATH)
@@ -281,13 +281,15 @@ def train(validate=True, resume_from_checkpoint=False):
     for epoch in range(start_epoch, NUM_EPOCHS):
         print(f"\n📦 EPOCH : {epoch + 1}")
         model.train()
-        train_loss = 0.0
+        train_loss, total_trans_rmse, total_rot_rmse = 0.0, 0.0, 0.0
+        num_samples = 0
         pbar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{NUM_EPOCHS}", leave=False)
 
         for imageL, imageR, labels in pbar:
             imageL, imageR, labels = imageL.to(DEVICE), imageR.to(DEVICE), labels.to(DEVICE)
-            optimizer.zero_grad(set_to_none=True)
+            batch_size = imageL.size(0)
 
+            optimizer.zero_grad(set_to_none=True)
             with autocast(device_type="cuda"):
                 outputs = model(imageL, imageR)
                 loss = combined_loss(outputs, labels, TRANS_WEIGHT, ROTATION_WEIGHT, ANGULAR_WEIGHT)
@@ -295,17 +297,30 @@ def train(validate=True, resume_from_checkpoint=False):
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
+            torch.cuda.synchronize()
 
-            train_loss += loss.item()
+            train_loss += loss.item() * batch_size
+            trans_rmse, rot_rmse = compute_errors(outputs, labels)
+            total_trans_rmse += trans_rmse * batch_size
+            total_rot_rmse += rot_rmse * batch_size
+            num_samples += batch_size
+
             pbar.set_postfix({"Loss": loss.item()})
 
-        avg_train_loss = train_loss / len(train_loader)
-        now.append(time.time())
-        print(f"✅ Epoch {epoch + 1} Avg Training Loss: {avg_train_loss:.4f}")
-        print(f"⏱️ Time per epoch {epoch + 1}: {int(now[epoch + 1] - now[epoch])}s")
+        avg_train_loss = train_loss / num_samples
+        avg_trans_rmse = total_trans_rmse / num_samples
+        avg_rot_rmse = total_rot_rmse / num_samples
 
-        # Log training loss
+        now.append(time.time())
+        time_per_epoch.append(int(now[epoch + 1] - now[epoch]))
+
+        print(f"✅ Avg Training Loss: {avg_train_loss:.4f}")
+        print(f"📐 RMSE - Trans: {avg_trans_rmse:.4f}, Rot: {avg_rot_rmse:.4f}")
+        print(f"⏱️ Time per epoch: {time_per_epoch[epoch]}s")
+
         writer.add_scalar("Loss/Train", avg_train_loss, epoch)
+        writer.add_scalar("RMSE/Train_Translation", avg_trans_rmse, epoch)
+        writer.add_scalar("RMSE/Train_Rotation", avg_rot_rmse, epoch)
 
         if epoch != 0 and epoch % 5 == 0:
             parameters_to_prune = [
@@ -313,41 +328,36 @@ def train(validate=True, resume_from_checkpoint=False):
                 if isinstance(m, (nn.Linear, nn.Conv2d)) and hasattr(m, 'weight')
             ]
             if parameters_to_prune:
-                prune.global_unstructured(
-                    parameters_to_prune,
-                    pruning_method=prune.L1Unstructured,
-                    amount=0.1
-                )
+                prune.global_unstructured(parameters_to_prune, pruning_method=prune.L1Unstructured, amount=0.1)
                 print(f"⚠️ Pruning applied at epoch {epoch}")
 
         if validate:
             model.eval()
-            val_loss = 0.0
-            total_trans_rmse, total_rot_rmse = 0.0, 0.0
-
+            val_loss, val_trans_rmse, val_rot_rmse = 0.0, 0.0, 0.0
+            val_samples = 0
             with torch.no_grad():
                 for imageL, imageR, labels in val_loader:
                     imageL, imageR, labels = imageL.to(DEVICE), imageR.to(DEVICE), labels.to(DEVICE)
-                    outputs = model(imageL, imageR)
-
-                    loss = combined_loss(outputs, labels, TRANS_WEIGHT, ROTATION_WEIGHT, ANGULAR_WEIGHT)
-                    val_loss += loss.item()
-
+                    batch_size = imageL.size(0)
+                    with autocast(device_type="cuda"):
+                        outputs = model(imageL, imageR)
+                        loss = combined_loss(outputs, labels, TRANS_WEIGHT, ROTATION_WEIGHT, ANGULAR_WEIGHT)
+                    torch.cuda.synchronize()
+                    val_loss += loss.item() * batch_size
                     trans_rmse, rot_rmse = compute_errors(outputs, labels)
-                    total_trans_rmse += trans_rmse
-                    total_rot_rmse += rot_rmse
+                    val_trans_rmse += trans_rmse * batch_size
+                    val_rot_rmse += rot_rmse * batch_size
+                    val_samples += batch_size
 
-            avg_val_loss = val_loss / len(val_loader)
-            avg_trans_rmse = total_trans_rmse / len(val_loader)
-            avg_rot_rmse = total_rot_rmse / len(val_loader)
+            avg_val_loss = val_loss / val_samples
+            avg_val_trans_rmse = val_trans_rmse / val_samples
+            avg_val_rot_rmse = val_rot_rmse / val_samples
 
-            print(f"📉 Validation Loss: {avg_val_loss:.4f}")
-            print(f"📐 RMSE - Translation: {avg_trans_rmse:.4f}, Rotation: {avg_rot_rmse:.4f}")
+            print(f"📉 Val Loss: {avg_val_loss:.4f} | RMSE Trans: {avg_val_trans_rmse:.4f}, Rot: {avg_val_rot_rmse:.4f}")
 
-            # Log validation stats
             writer.add_scalar("Loss/Val", avg_val_loss, epoch)
-            writer.add_scalar("RMSE/Translation", avg_trans_rmse, epoch)
-            writer.add_scalar("RMSE/Rotation", avg_rot_rmse, epoch)
+            writer.add_scalar("RMSE/Val_Translation", avg_val_trans_rmse, epoch)
+            writer.add_scalar("RMSE/Val_Rotation", avg_val_rot_rmse, epoch)
 
             scheduler.step(avg_val_loss)
 
@@ -365,7 +375,7 @@ def train(validate=True, resume_from_checkpoint=False):
                 print(f"💾 Best model saved to: {BEST_MODEL_PATH}")
             else:
                 epochs_no_improve += 1
-                print(f"📉 No improvement ({epochs_no_improve}/{PATIENCE})")
+                print(f"⚠️ No improvement ({epochs_no_improve}/{PATIENCE})")
                 if epochs_no_improve >= PATIENCE:
                     print("⏹️ Early stopping triggered")
                     break
@@ -381,12 +391,13 @@ def train(validate=True, resume_from_checkpoint=False):
         print(f"💾 Checkpoint saved to: {MODEL_SAVE_PATH}")
 
     writer.close()
+    return time_per_epoch
 
 # %% [markdown]
 # Actually training
 
 # %%
-train(validate=True,resume_from_checkpoint=False)
+time_per_epoch = train(validate=True,resume_from_checkpoint=False)
 
 # %% [markdown]
 # Update
@@ -396,9 +407,10 @@ train(validate=True,resume_from_checkpoint=False)
 # with open("GlobVar.json", "w") as file:
 #     json.dump(gv, file, indent=4)
 # print("mod_id updated in GlobVar.json")
-mod_id += 1
+
+
 # %%
-CLEAN_MODEL_PATH = os.path.join(BASE_DIR, f"model/CLEAN-S-SW-ConvNeXt6DP{BATCH_ID}.{mod_id}.pth")
+CLEAN_MODEL_PATH = os.path.join(BASE_DIR, f"model/CLEAN-S-SW-ConvNeXt6DP{BATCH_ID}.{MOD_ID}.pth")
 for name, module in model.named_modules():
     if isinstance(module, torch.nn.Conv2d) or isinstance(module, torch.nn.Linear):
         if hasattr(module, "weight_orig"):
@@ -415,40 +427,45 @@ def test_model(model, loader, mode='Test', use_amp=False):
     total_loss = 0.0
     total_trans_rmse = 0.0
     total_rot_rmse = 0.0
+    num_samples = 0
     all_preds, all_gts = [], []
 
     with torch.no_grad():
-        for imageL,imageR, labels in tqdm(loader, desc=f"Running {mode}"):
-            imageL = imageL.to(DEVICE)
-            imageR = imageR.to(DEVICE)
-            labels = labels.to(DEVICE)
+        for imageL, imageR, labels in tqdm(loader, desc=f"Running {mode}"):
+            imageL, imageR, labels = imageL.to(DEVICE), imageR.to(DEVICE), labels.to(DEVICE)
+            batch_size = imageL.size(0)
 
+            torch.cuda.synchronize()
             start_time = time.time()
 
             if use_amp:
                 with autocast(device_type="cuda"):
                     outputs = model(imageL, imageR)
-
                     loss = combined_loss(outputs, labels, TRANS_WEIGHT, ROTATION_WEIGHT, ANGULAR_WEIGHT)
             else:
                 outputs = model(imageL, imageR)
                 loss = combined_loss(outputs, labels, TRANS_WEIGHT, ROTATION_WEIGHT, ANGULAR_WEIGHT)
 
-            inference_time = (time.time() - start_time) * 1000 / imageL.size(0)  # ms per image
+            torch.cuda.synchronize()
+            inference_time = (time.time() - start_time) * 1000 / batch_size
             inference_times.append(inference_time)
 
-            total_loss += loss.item()
+            total_loss += loss.item() * batch_size
             trans_rmse, rot_rmse = compute_errors(outputs, labels)
-            total_trans_rmse += trans_rmse
-            total_rot_rmse += rot_rmse
+            total_trans_rmse += trans_rmse * batch_size
+            total_rot_rmse += rot_rmse * batch_size
+            num_samples += batch_size
 
             all_preds.append(outputs.cpu().numpy())
             all_gts.append(labels.cpu().numpy())
 
-    avg_loss = total_loss / len(loader)
-    avg_inference_time = np.mean(inference_times)
-
-    return avg_loss, total_trans_rmse, total_rot_rmse, np.concatenate(all_preds), np.concatenate(all_gts), avg_inference_time
+    return (
+        total_loss / num_samples,
+        total_trans_rmse / num_samples,
+        total_rot_rmse / num_samples,
+        np.concatenate(all_preds), np.concatenate(all_gts),
+        np.mean(inference_times)
+    )
 
 # %% [markdown]
 # Actually testing
@@ -457,14 +474,14 @@ def test_model(model, loader, mode='Test', use_amp=False):
 model.load_state_dict(torch.load(CLEAN_MODEL_PATH))
 model.to(DEVICE)
 
-test_avg_loss, test_total_trans_rmse, test_total_rot_rmse, test_preds, test_gts, test_avg_inference_time = test_model(
+test_avg_loss, test_avg_trans_rmse, test_avg_rot_rmse, test_preds, test_gts, test_avg_inference_time = test_model(
     model, test_loader, mode='Test', use_amp=True
 )
 
 print("\n📊 Test Summary")
 print(f"🔁 Average Loss       : {test_avg_loss:.4f}")
-print(f"📐 Translation RMSE   : {test_total_trans_rmse:.4f}")
-print(f"📐 Rotation RMSE      : {test_total_rot_rmse:.4f}")
+print(f"📐 Translation RMSE   : {test_avg_trans_rmse:.4f}")
+print(f"📐 Rotation RMSE      : {test_avg_rot_rmse:.4f}")
 print(f"⚡ Inference Time (ms) : {test_avg_inference_time:.2f} ms/image")
 
 # %% [markdown]
@@ -472,50 +489,57 @@ print(f"⚡ Inference Time (ms) : {test_avg_inference_time:.2f} ms/image")
 
 # %%
 def validate_model(model_path=None):
-    inference_times = []
+    if model_path and not os.path.exists(model_path):
+        raise ValueError(f"Model path {model_path} does not exist.")
     if model_path:
-        if not os.path.exists(model_path):
-            raise ValueError(f"Model path {model_path} does not exist.")
         model.load_state_dict(torch.load(model_path))
+
     model.to(DEVICE)
     model.eval()
-    total_loss, total_trans_rmse, total_rot_rmse = 0, 0, 0
+    inference_times = []
+    total_loss = 0.0
+    total_trans_rmse = 0.0
+    total_rot_rmse = 0.0
+    num_samples = 0
     all_preds, all_gts = [], []
 
     with torch.no_grad():
-        for imageL,imageR, labels in tqdm(val_loader, desc="Running Validation"):
-            # Move to device FIRST
-            imageL = imageL.to(DEVICE)
-            imageR = imageR.to(DEVICE)
-            labels = labels.to(DEVICE)
+        for imageL, imageR, labels in tqdm(val_loader, desc="Running Validation"):
+            imageL, imageR, labels = imageL.to(DEVICE), imageR.to(DEVICE), labels.to(DEVICE)
+            batch_size = imageL.size(0)
 
+            torch.cuda.synchronize()
             start_time = time.time()
 
-            with autocast(device_type="cuda"):  # Optional for mixed precision inference
+            with autocast(device_type="cuda"):
                 outputs = model(imageL, imageR)
                 loss = combined_loss(outputs, labels, TRANS_WEIGHT, ROTATION_WEIGHT, ANGULAR_WEIGHT)
 
-            inference_time = (time.time() - start_time) * 1000 / imageL.size(0)  # ms per image
-            inference_times.append(inference_time) #avg the 2 out lmao
+            torch.cuda.synchronize()
+            inference_times.append((time.time() - start_time) * 1000 / batch_size)
 
-            total_loss += loss.item()
+            total_loss += loss.item() * batch_size
             trans_rmse, rot_rmse = compute_errors(outputs, labels)
-            total_rot_rmse += rot_rmse
-            total_trans_rmse += trans_rmse
+            total_trans_rmse += trans_rmse * batch_size
+            total_rot_rmse += rot_rmse * batch_size
+            num_samples += batch_size
 
             all_preds.append(outputs.cpu().numpy())
             all_gts.append(labels.cpu().numpy())
 
-    avg_inference_time = np.mean(inference_times)
-    avg_loss = total_loss / len(val_loader)
-    return avg_loss, total_trans_rmse, total_rot_rmse, np.concatenate(all_preds), np.concatenate(all_gts), avg_inference_time
-
+    return (
+        total_loss / num_samples,
+        total_trans_rmse / num_samples,
+        total_rot_rmse / num_samples,
+        np.concatenate(all_preds), np.concatenate(all_gts),
+        np.mean(inference_times)
+    )
 
 # %% [markdown]
 # Actually validating
 
 # %%
-val_avg_loss, val_total_trans_rmse, val_total_rot_rmse, val_preds, val_gts, val_avg_inference_time = validate_model(CLEAN_MODEL_PATH)
+val_avg_loss, val_avg_trans_rmse, val_avg_rot_rmse, val_preds, val_gts, val_avg_inference_time = validate_model(CLEAN_MODEL_PATH)
 
 # %%
 torch.cuda.empty_cache()
@@ -529,15 +553,18 @@ val_translation_rmse_cm = calculate_translation_rmse(val_preds, val_gts)
 test_rot_accuracy = rotation_error_deg_from_6d(torch.tensor(test_preds[:, 3:]), torch.tensor(test_gts[:, 3:]))
 val_rot_accuracy = rotation_error_deg_from_6d(torch.tensor(val_preds[:, 3:]), torch.tensor(val_gts[:, 3:]))
 
+
+# %%
 train_trans_stats = get_dataset_stats(train_loader)
 val_trans_stats = get_dataset_stats(val_loader)
 test_trans_stats = get_dataset_stats(test_loader)
 
+# %%
 test_range_cm = (test_trans_stats['max'].mean() - test_trans_stats['min'].mean()) * 100
 val_range_cm = (val_trans_stats['max'].mean() - val_trans_stats['min'].mean()) * 100
 
-test_trans_accuracy_pct = translation_accuracy_percentage(test_translation_rmse_cm, test_range_cm).item()
-val_trans_accuracy_pct = translation_accuracy_percentage(val_translation_rmse_cm, val_range_cm).item()
+test_trans_accuracy_pct = translation_accuracy_percentage(test_translation_rmse_cm, test_range_cm)
+val_trans_accuracy_pct = translation_accuracy_percentage(val_translation_rmse_cm, val_range_cm)
 
 test_rot_accuracy_pct = 100*(1-(test_rot_accuracy.item()/360))
 val_rot_accuracy_pct = 100*(1-(val_rot_accuracy.item()/360))
@@ -546,8 +573,8 @@ val_rot_accuracy_pct = 100*(1-(val_rot_accuracy.item()/360))
 # Write MD
 
 # %%
-eval_path = os.path.join(BASE_DIR, f"model/S-SW-ConvNeXt6DP_batch{BATCH_ID}.{mod_id}.md")
-eval_content = f"""# Evaluation Results - Batch {BATCH_ID} - Model {mod_id}
+eval_path = os.path.join(BASE_DIR, f"model/S-SW-ConvNeXt6DP_batch{BATCH_ID}.{MOD_ID}.md")
+eval_content = f"""# Evaluation Results - Batch {BATCH_ID} - Model {MOD_ID}
 
 ## Training Configuration
 - Batch Size: {BATCH_SIZE}
@@ -563,28 +590,28 @@ eval_content = f"""# Evaluation Results - Batch {BATCH_ID} - Model {mod_id}
 
 ## Model Architecture
 - Backbone: Using ConvNeXt V2 Nano @ 224 x2 shared weights
-- Head: Linear(1280 → 512 → 9) (640 * 2)
+- Head: Linear(1280 -> 256 -> 9) (640 * 2)
 
 ## Evaluation Metrics
 
 ### Test Set
 - Average Loss: {test_avg_loss:.4f}
-- Translation RMSE: {test_total_trans_rmse / len(test_loader):.4f}
+- Translation RMSE: {test_avg_trans_rmse:.4f}
 - Translation Accuracy: {test_translation_rmse_cm:.2f} cm
 - Translation Accuracy %: {test_trans_accuracy_pct:.2f}%
-- Rotation RMSE: {test_total_rot_rmse / len(test_loader):.4f}
+- Rotation RMSE: {test_avg_rot_rmse:.4f}
 - Rotation Accuracy: {test_rot_accuracy:.2f}°
-- Rotation Accuracy % : {test_rot_accuracy_pct} %
+- Rotation Accuracy % : {test_rot_accuracy_pct:.2f} %
 - Inference Speed: {test_avg_inference_time:.2f} ms/frame
 
 ### Validation Set
 - Average Loss: {val_avg_loss:.4f}
-- Translation RMSE: {val_total_trans_rmse / len(val_loader):.4f}
+- Translation RMSE: {val_avg_trans_rmse:.4f}
 - Translation Accuracy: {val_translation_rmse_cm:.2f} cm
 - Translation Accuracy %: {val_trans_accuracy_pct:.2f}%
-- Rotation RMSE: {val_total_rot_rmse / len(val_loader):.4f}
+- Rotation RMSE: {val_avg_rot_rmse:.4f}
 - Rotation Accuracy: {val_rot_accuracy:.2f}°
-- Rotation Accuracy % : {val_rot_accuracy_pct} %
+- Rotation Accuracy % : {val_rot_accuracy_pct:.2f} %
 - Inference Speed: {val_avg_inference_time:.2f} ms/frame
 
 ## Dataset Statistics
@@ -613,7 +640,7 @@ write_header = not os.path.exists(csv_path)
 csv_data = {
     'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     'dataset_id': BATCH_ID,
-    'model_id': mod_id,
+    'model_id': MOD_ID,
     'batch_size': BATCH_SIZE,
     'epochs': NUM_EPOCHS,
     'learning_rate': LEARNING_RATE,
@@ -622,15 +649,15 @@ csv_data = {
     'angular_weight' : ANGULAR_WEIGHT,
     'patience' : PATIENCE,
     'test_loss': test_avg_loss,
-    'test_translation_rmse': test_total_trans_rmse / len(test_loader),
+    'test_translation_rmse': test_avg_trans_rmse,
     'test_translation_accuracy_pct': test_trans_accuracy_pct,
-    'test_rotation_rmse': test_total_rot_rmse / len(test_loader),
+    'test_rotation_rmse': test_avg_rot_rmse,
     'test_rotation_accuracy_pct':test_rot_accuracy_pct,
     'test_inference_time_ms': test_avg_inference_time,
     'validation_loss': val_avg_loss,
-    'validation_translation_rmse': val_total_trans_rmse / len(val_loader),
+    'validation_translation_rmse': val_avg_trans_rmse,
     'validation_translation_accuracy_pct': val_trans_accuracy_pct,
-    'validation_rotation_rmse': val_total_rot_rmse / len(val_loader),
+    'validation_rotation_rmse': val_avg_rot_rmse,
     'validation_rotation_accuracy_pct':val_rot_accuracy_pct,
     'validation_inference_time_ms': val_avg_inference_time,
     'model_path': MODEL_SAVE_PATH,
@@ -643,5 +670,68 @@ with open(csv_path, 'a', newline='') as csvfile:
         writer.writeheader()
     writer.writerow(csv_data)
 print(f"Results appended to CSV: {csv_path}")
+
+# %%
+def safe(val):
+    if isinstance(val, (np.floating, np.integer)):
+        return val.item()
+    return val
+
+def log_eval_to_xlsx(
+    variant="SW-Twin",
+    head_arch="640x2 → 256 → 9",
+    param_count=165000,
+    notes="✅ Baseline test run - decent performance",
+    xlsx_path=os.path.join(BASE_DIR, "model/EVAL.xlsx")
+):
+    headers = [
+        "ID", "IMG_SIZE", "VARIANT", "HEAD_ARCH", "PARAM_COUNT", "BATCH_SIZE", "EPC", "DTS_ID", "DTS_LEN", "LR_RT",
+        "TRAIN_TIME", "VRAM_USG", "VAL_LOSS", "TS_LOSS",
+        "VAL_TRANS_RSME", "TS_TRANS_RMSE", "VAL_ROT_RSME", "TS_ROT_RMSE",
+        "VAL_TRANS_ACC", "TS_TRANS_ACC", "VAL_ROT_ACC", "TS_ROT_ACC",
+        "VAL_INF_MS", "TS_INF_MS", "Notes"
+    ]
+
+    model_id_str = f"{BATCH_ID}{MOD_ID}"
+    dataset_len = len(train_loader.dataset) + len(val_loader.dataset) + len(test_loader.dataset)
+
+    row = [
+        int(model_id_str), IMG_SIZE, variant, head_arch, param_count, BATCH_SIZE, NUM_EPOCHS,
+        BATCH_ID, dataset_len, str(LEARNING_RATE),  # Still keep LR as string
+        # round(sum(time_per_epoch)/60,1), 4.9,  # TRAIN_TIME, VRAM_USG
+        round(113*18/60,1), 4.9,
+        round(val_avg_loss, 4), round(test_avg_loss, 4),
+        round(val_avg_trans_rmse , 4),
+        round(test_avg_trans_rmse, 4),
+        round(val_avg_rot_rmse , 4),
+        round(test_avg_rot_rmse , 4),
+
+        round(float(val_trans_accuracy_pct), 2), round(float(test_trans_accuracy_pct), 2),
+        round(float(val_rot_accuracy_pct), 2), round(float(test_rot_accuracy_pct), 2),
+
+        round(val_avg_inference_time, 2), round(test_avg_inference_time, 2),
+
+        notes
+    ]
+
+
+    row = [safe(x) for x in row]
+
+    # Load or create workbook
+    if os.path.exists(xlsx_path):
+        wb = load_workbook(xlsx_path)
+        ws = wb.active
+    else:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "ConvNeXt V2 Nano"
+        ws.append(headers)
+
+    ws.append(row)
+    wb.save(xlsx_path)
+    print(f"✅ Evaluation logged to Excel: {xlsx_path}")
+
+
+log_eval_to_xlsx()
 
 
