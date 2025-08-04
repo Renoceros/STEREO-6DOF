@@ -518,7 +518,7 @@ with col3:
 
 # --- Start Training Button ---
 st.markdown("---")
-if st.button("🚀 Start Training"):
+if st.button("Start Training"):
     st.header("Training Progress")
     progress_placeholder = st.empty()
     status_placeholder = st.empty()

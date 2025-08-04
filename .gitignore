@@ -8,3 +8,4 @@
 /development/
 /rect_test/
 *.pth
+*.pyc

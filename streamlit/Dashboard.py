@@ -295,7 +295,7 @@ with tab5:
             os.makedirs(os.path.join(MODEL_DIR, output_subdir), exist_ok=True) # Ensure output directory exists
 
         st.markdown("---")
-        if st.button("🚀 Start Freezing Model"):
+        if st.button("Start Freezing Model"):
             if not selected_model_file:
                 st.error("Please select a model file.")
             elif not head_layers_str_freeze.strip():
