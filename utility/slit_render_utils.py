@@ -26,88 +26,101 @@ def load_model(model_dir, model_file):
     return inference_model.get_model(os.path.join(model_dir, model_file))
 
 def predict_and_render(model, model_file, frame):
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    h, w, _ = frame.shape
+    # The input 'frame' is expected to be in BGR format from OpenCV.
+    
+    # Convert to RGB for PIL and model processing.
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    h, w, _ = frame_rgb.shape
     model_name = model_file.lower()
 
     if "6ch" in model_name:
         mid = w // 2
-        left = transform(Image.fromarray(frame[:, :mid]))
-        right = transform(Image.fromarray(frame[:, mid:]))
+        left = transform(Image.fromarray(frame_rgb[:, :mid]))
+        right = transform(Image.fromarray(frame_rgb[:, mid:]))
         stacked = torch.cat([left, right], dim=0).unsqueeze(0).to(DEVICE)
         with torch.no_grad():
             output = model(stacked).cpu().numpy()[0]
-        combined = cv2.hconcat([frame[:, :mid], frame[:, mid:]])
+        # The 'combined' frame is currently RGB.
+        combined_rgb = cv2.hconcat([frame_rgb[:, :mid], frame_rgb[:, mid:]])
+        
     elif "sw" in model_name:
         mid = w // 2
-        left = frame[:, :mid]
-        right = frame[:, mid:]
+        left = frame_rgb[:, :mid]
+        right = frame_rgb[:, mid:]
         left_img = transform(Image.fromarray(left)).unsqueeze(0).to(DEVICE)
         right_img = transform(Image.fromarray(right)).unsqueeze(0).to(DEVICE)
         with torch.no_grad():
             output = model(left_img, right_img).cpu().numpy()[0]
-        combined = cv2.hconcat([left, right])
+        # The 'combined' frame is currently RGB.
+        combined_rgb = cv2.hconcat([left, right])
+        
     else:
-        img_tensor = transform(Image.fromarray(frame)).unsqueeze(0).to(DEVICE)
+        img_tensor = transform(Image.fromarray(frame_rgb)).unsqueeze(0).to(DEVICE)
         with torch.no_grad():
             output = model(img_tensor).cpu().numpy()[0]
-        combined = frame
+        # The 'combined' frame is currently RGB.
+        combined_rgb = frame_rgb
 
-    render = render_3d_pose(output)
-    return combined, render
+    # Get the 3D render, which is already in BGR format.
+    render_bgr = render_3d_pose(output)
+    
+    # FIX: Convert the combined frame from RGB back to BGR before returning.
+    # This ensures both returned frames are in the same BGR format.
+    combined_bgr = cv2.cvtColor(combined_rgb, cv2.COLOR_RGB2BGR)
+    
+    return combined_bgr, render_bgr
 
-def to_av_frame(pred_frame):
-    return av.VideoFrame.from_ndarray(cv2.cvtColor(pred_frame, cv2.COLOR_RGB2BGR), format="bgr24")
+def to_av_frame(bgr_frame):
+    # FIX: This function now expects a BGR frame, so no conversion is needed.
+    # It passes the frame directly to the video streamer.
+    return av.VideoFrame.from_ndarray(bgr_frame, format="bgr24")
 
-def render_3d_pose(pose):
-    def create_colored_face(width, height, color, transform):
-        mesh = o3d.geometry.TriangleMesh.create_box(width=width, height=height, depth=0.001)
-        mesh.paint_uniform_color(color)
-        mesh.translate(transform)
-        return mesh
+def render_3d_pose(pose_9d):
+    # --- 1. EXTRACT POSE & CONVERT 6D ROTATION TO 3x3 MATRIX ---
+    trans = pose_9d[:3]
+    rot_6d = pose_9d[3:]
+    a1 = rot_6d[0:3]
+    a2 = rot_6d[3:6]
+    b1 = a1 / np.linalg.norm(a1)
+    b2 = a2 - np.dot(b1, a2) * b1
+    b2 = b2 / np.linalg.norm(b2)
+    b3 = np.cross(b1, b2)
+    R = np.stack((b1, b2, b3), axis=1)
 
-    face_colors = {
-        "front":  [1, 0, 0],
-        "back":   [0, 1, 0],
-        "left":   [0, 0, 1],
-        "right":  [1, 1, 0],
-        "top":    [1, 0, 1],
-        "bottom": [0, 1, 1],
-    }
+    # --- 2. LOAD AND PREPARE MESH ---
+    mesh = o3d.io.read_triangle_mesh("cube.glb", enable_post_processing=True)
+    if not mesh.has_vertex_normals():
+        mesh.compute_vertex_normals()
+    mesh.scale(0.04, center=mesh.get_center())
+    correction_rotation = o3d.geometry.get_rotation_matrix_from_xyz((0, -np.pi / 2, 0))
+    mesh.rotate(correction_rotation, center=mesh.get_center())
 
-    faces = [
-        create_colored_face(0.1, 0.1, face_colors["front"],  [-0.05, -0.05,  0.05]),
-        create_colored_face(0.1, 0.1, face_colors["back"],   [-0.05, -0.05, -0.05]),
-        create_colored_face(0.001, 0.1, face_colors["left"], [-0.05, -0.05, -0.05]),
-        create_colored_face(0.001, 0.1, face_colors["right"],[ 0.05, -0.05, -0.05]),
-        create_colored_face(0.1, 0.001, face_colors["bottom"],[-0.05, -0.05, -0.05]),
-        create_colored_face(0.1, 0.001, face_colors["top"],   [-0.05,  0.05, -0.05])
-    ]
+    # --- 3. APPLY THE PREDICTED POSE ---
+    mesh.rotate(R, center=(0, 0, 0))
+    mesh.translate(trans)
 
-    cube = faces[0]
-    for face in faces[1:]:
-        cube += face
-
-    trans = pose[:3]
-    rot = np.radians(pose[3:6])
-    R = o3d.geometry.get_rotation_matrix_from_xyz(rot)
-    cube.rotate(R, center=(0, 0, 0))
-    cube.translate(trans)
-
+    # --- 4. VISUALIZATION ---
     vis = o3d.visualization.Visualizer()
-    vis.create_window(visible=False, width=400, height=400)
-    vis.add_geometry(cube)
-
-    vis.poll_events()
-    vis.update_renderer()
-
+    vis.create_window(visible=False, width=800, height=800)
+    vis.add_geometry(mesh)
+    opt = vis.get_render_option()
+    opt.light_on = True
+    opt.background_color = np.array([1, 1, 1])
     view_ctl = vis.get_view_control()
     view_ctl.set_zoom(0.5)
-    view_ctl.rotate(10.0, 0.0)
-
+    cam_params = view_ctl.convert_to_pinhole_camera_parameters()
+    extrinsic = cam_params.extrinsic.copy()
+    extrinsic[:3, 3] = np.array([0.06, 0.0, 0.8])
+    cam_params.extrinsic = extrinsic
+    view_ctl.convert_from_pinhole_camera_parameters(cam_params, allow_arbitrary=True)
+    vis.poll_events()
+    vis.update_renderer()
     img = vis.capture_screen_float_buffer(do_render=True)
     vis.destroy_window()
-
+    
+    # Convert the rendered RGB image to BGR before returning.
     rgb_img = (np.asarray(img) * 255).astype(np.uint8)
     bgr_img = cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR)
+    
+    # This function correctly returns a BGR image.
     return bgr_img

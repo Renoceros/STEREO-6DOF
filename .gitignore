@@ -9,3 +9,5 @@
 /rect_test/
 *.pth
 *.pyc
+/utility/__pycache__/
+
