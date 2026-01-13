@@ -4,10 +4,7 @@ import torch.nn as nn
 import timm
 
 # === MANUAL SELECTION ===
-BATCH_ID = 7
-MODEL_ID = 5
-MODEL_VER = "S"
-MODEL_NAME = f"CLEAN-{MODEL_VER}-ConvNeXt6DP{BATCH_ID}.{MODEL_ID}.pth"  # Replace this
+MODEL_NAME = "CLEAN-S-SW-ConvNeXt6DP7.8.pth"
 
 # === CONFIG ===
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
